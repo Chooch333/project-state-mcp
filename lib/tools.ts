@@ -14,6 +14,30 @@ export const TOOLS = [
     },
   },
   {
+    name: 'get_activity',
+    description: 'Timeline of what happened in a date range. Returns a chronological list of events: decisions added/superseded, assumptions added/confirmed/invalidated, blockers raised/resolved, next_moves added/completed, plans added/status-changed, notes added, lessons added, status snapshots written. Use when the person asks anything like "what did we do last week," "catch me up on X since Wednesday," "what has changed in the last 4 days," "what happened on this project recently." Default window is the last 7 days if no since or relative_days is given.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_slug: { type: 'string', description: 'Optional: limit to one project. Omit for cross-project activity.' },
+        since: { type: 'string', description: 'ISO date/datetime for start of window. If omitted, uses relative_days.' },
+        until: { type: 'string', description: 'ISO date/datetime for end of window. Defaults to now.' },
+        relative_days: { type: 'number', description: 'Shortcut for since = now - N days. Default 7. Ignored if since is set.' },
+        entity_types: {
+          type: 'array',
+          items: { type: 'string', enum: ['decision', 'assumption', 'blocker', 'next_move', 'plan', 'snapshot', 'note', 'lesson'] },
+          description: 'Optional: filter to specific entity types.',
+        },
+        event_types: {
+          type: 'array',
+          items: { type: 'string', enum: ['added', 'completed', 'resolved', 'confirmed', 'invalidated', 'superseded', 'plan_status_changed'] },
+          description: 'Optional: filter to specific event types.',
+        },
+        limit: { type: 'number', description: 'Max events returned. Default 100.' },
+      },
+    },
+  },
+  {
     name: 'list_projects',
     description: 'List all projects tracked in the state database.',
     inputSchema: {
