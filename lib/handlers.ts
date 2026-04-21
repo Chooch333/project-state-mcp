@@ -222,6 +222,343 @@ function daysAgo(then: Date, now: Date): number {
 }
 
 // ─────────────────────────────────────────────────────────
+// ACTIVITY TIMELINE
+// Chronological list of events across entity types.
+// ─────────────────────────────────────────────────────────
+
+async function getActivity(supabase: SupabaseClient, args: Args): Promise<string> {
+  const now = new Date();
+  const relativeDays = typeof args.relative_days === 'number' ? args.relative_days : 7;
+  const since = args.since ? new Date(args.since) : new Date(now.getTime() - relativeDays * 24 * 60 * 60 * 1000);
+  const until = args.until ? new Date(args.until) : now;
+  const sinceIso = since.toISOString();
+  const untilIso = until.toISOString();
+  const limit = Math.max(1, Math.min(args.limit ?? 100, 500));
+
+  const entityTypes: string[] | undefined = args.entity_types;
+  const eventTypes: string[] | undefined = args.event_types;
+  const allowEntity = (t: string) => !entityTypes || entityTypes.includes(t);
+  const allowEvent = (t: string) => !eventTypes || eventTypes.includes(t);
+
+  let projectFilter: { project_id?: string } | null = null;
+  if (args.project_slug) {
+    const projectId = await resolveProjectId(supabase, args.project_slug);
+    projectFilter = { project_id: projectId };
+  }
+
+  // Also resolve slug map so events can carry project_slug back when scanning all projects
+  const { data: projectRows } = await supabase.from('projects').select('id, slug');
+  const idToSlug = new Map<string, string>();
+  (projectRows ?? []).forEach((p: any) => idToSlug.set(p.id, p.slug));
+
+  const events: any[] = [];
+  const applyProjectFilter = (q: any) => (projectFilter ? q.eq('project_id', projectFilter.project_id) : q);
+
+  // Helper to push one event
+  const pushEvent = (evt: {
+    timestamp: string;
+    entity_type: string;
+    event_type: string;
+    entity_id: string;
+    project_id: string;
+    summary: string;
+    source?: string | null;
+    extra?: Record<string, any>;
+  }) => {
+    if (!allowEntity(evt.entity_type)) return;
+    if (!allowEvent(evt.event_type)) return;
+    events.push({
+      timestamp: evt.timestamp,
+      entity_type: evt.entity_type,
+      event_type: evt.event_type,
+      entity_id: evt.entity_id,
+      project_slug: idToSlug.get(evt.project_id) ?? evt.project_id,
+      summary: evt.summary,
+      source: evt.source ?? null,
+      ...(evt.extra ?? {}),
+    });
+  };
+
+  // ── Decisions: added or superseded ──
+  if (allowEntity('decision')) {
+    const { data: decisions, error } = await applyProjectFilter(
+      supabase.from('decisions').select('id, project_id, title, rationale, source, supersedes, decided_at')
+        .gte('decided_at', sinceIso).lte('decided_at', untilIso)
+    );
+    if (error) throw new Error(`decisions activity: ${error.message}`);
+    (decisions ?? []).forEach((d: any) => {
+      pushEvent({
+        timestamp: d.decided_at,
+        entity_type: 'decision',
+        event_type: d.supersedes ? 'superseded' : 'added',
+        entity_id: d.id,
+        project_id: d.project_id,
+        summary: d.supersedes ? `Superseded decision: ${d.title}` : `Decision: ${d.title}`,
+        source: d.source,
+        extra: d.supersedes ? { supersedes: d.supersedes } : undefined,
+      });
+    });
+  }
+
+  // ── Assumptions: added, confirmed, invalidated ──
+  if (allowEntity('assumption')) {
+    // Added
+    const { data: added, error: addedErr } = await applyProjectFilter(
+      supabase.from('assumptions').select('id, project_id, statement, source, created_at')
+        .gte('created_at', sinceIso).lte('created_at', untilIso)
+    );
+    if (addedErr) throw new Error(`assumptions added: ${addedErr.message}`);
+    (added ?? []).forEach((a: any) => {
+      pushEvent({
+        timestamp: a.created_at,
+        entity_type: 'assumption',
+        event_type: 'added',
+        entity_id: a.id,
+        project_id: a.project_id,
+        summary: `Assumption: ${a.statement}`,
+        source: a.source,
+      });
+    });
+
+    // Confirmed/invalidated
+    const { data: changed, error: changedErr } = await applyProjectFilter(
+      supabase.from('assumptions').select('id, project_id, statement, status, status_reason, source, status_changed_at')
+        .not('status_changed_at', 'is', null).gte('status_changed_at', sinceIso).lte('status_changed_at', untilIso)
+    );
+    if (changedErr) throw new Error(`assumptions status-changes: ${changedErr.message}`);
+    (changed ?? []).forEach((a: any) => {
+      const evType = a.status === 'confirmed' ? 'confirmed' : a.status === 'invalidated' ? 'invalidated' : 'added';
+      pushEvent({
+        timestamp: a.status_changed_at,
+        entity_type: 'assumption',
+        event_type: evType,
+        entity_id: a.id,
+        project_id: a.project_id,
+        summary: `Assumption ${a.status}: ${a.statement}${a.status_reason ? ` (${a.status_reason})` : ''}`,
+        source: a.source,
+      });
+    });
+  }
+
+  // ── Blockers: raised (added), resolved ──
+  if (allowEntity('blocker')) {
+    const { data: added, error: addedErr } = await applyProjectFilter(
+      supabase.from('blockers').select('id, project_id, question, source, created_at')
+        .gte('created_at', sinceIso).lte('created_at', untilIso)
+    );
+    if (addedErr) throw new Error(`blockers added: ${addedErr.message}`);
+    (added ?? []).forEach((b: any) => {
+      pushEvent({
+        timestamp: b.created_at,
+        entity_type: 'blocker',
+        event_type: 'added',
+        entity_id: b.id,
+        project_id: b.project_id,
+        summary: `Blocker raised: ${b.question}`,
+        source: b.source,
+      });
+    });
+
+    const { data: resolved, error: resolvedErr } = await applyProjectFilter(
+      supabase.from('blockers').select('id, project_id, question, answer, source, resolved_at')
+        .not('resolved_at', 'is', null).gte('resolved_at', sinceIso).lte('resolved_at', untilIso)
+    );
+    if (resolvedErr) throw new Error(`blockers resolved: ${resolvedErr.message}`);
+    (resolved ?? []).forEach((b: any) => {
+      pushEvent({
+        timestamp: b.resolved_at,
+        entity_type: 'blocker',
+        event_type: 'resolved',
+        entity_id: b.id,
+        project_id: b.project_id,
+        summary: `Blocker resolved: ${b.question}${b.answer ? ` — ${b.answer}` : ''}`,
+        source: b.source,
+      });
+    });
+  }
+
+  // ── Next moves: added, completed ──
+  if (allowEntity('next_move')) {
+    const { data: added, error: addedErr } = await applyProjectFilter(
+      supabase.from('next_moves').select('id, project_id, description, priority, source, created_at')
+        .gte('created_at', sinceIso).lte('created_at', untilIso)
+    );
+    if (addedErr) throw new Error(`next_moves added: ${addedErr.message}`);
+    (added ?? []).forEach((m: any) => {
+      pushEvent({
+        timestamp: m.created_at,
+        entity_type: 'next_move',
+        event_type: 'added',
+        entity_id: m.id,
+        project_id: m.project_id,
+        summary: `Next move added (${m.priority}): ${m.description}`,
+        source: m.source,
+      });
+    });
+
+    const { data: completed, error: completedErr } = await applyProjectFilter(
+      supabase.from('next_moves').select('id, project_id, description, source, completed_at, completed_by_plan_id')
+        .not('completed_at', 'is', null).gte('completed_at', sinceIso).lte('completed_at', untilIso)
+    );
+    if (completedErr) throw new Error(`next_moves completed: ${completedErr.message}`);
+    (completed ?? []).forEach((m: any) => {
+      pushEvent({
+        timestamp: m.completed_at,
+        entity_type: 'next_move',
+        event_type: 'completed',
+        entity_id: m.id,
+        project_id: m.project_id,
+        summary: `Next move completed: ${m.description}`,
+        source: m.source,
+        extra: m.completed_by_plan_id ? { completed_by_plan_id: m.completed_by_plan_id } : undefined,
+      });
+    });
+  }
+
+  // ── Plans: added, status changed ──
+  if (allowEntity('plan')) {
+    const { data: added, error: addedErr } = await applyProjectFilter(
+      supabase.from('plans').select('id, project_id, title, status, source, created_at')
+        .gte('created_at', sinceIso).lte('created_at', untilIso)
+    );
+    if (addedErr) throw new Error(`plans added: ${addedErr.message}`);
+    (added ?? []).forEach((p: any) => {
+      pushEvent({
+        timestamp: p.created_at,
+        entity_type: 'plan',
+        event_type: 'added',
+        entity_id: p.id,
+        project_id: p.project_id,
+        summary: `Plan created: ${p.title} (${p.status})`,
+        source: p.source,
+      });
+    });
+
+    const { data: blessed, error: blessedErr } = await applyProjectFilter(
+      supabase.from('plans').select('id, project_id, title, status, source, blessed_at')
+        .not('blessed_at', 'is', null).gte('blessed_at', sinceIso).lte('blessed_at', untilIso)
+    );
+    if (blessedErr) throw new Error(`plans blessed: ${blessedErr.message}`);
+    (blessed ?? []).forEach((p: any) => {
+      pushEvent({
+        timestamp: p.blessed_at,
+        entity_type: 'plan',
+        event_type: 'plan_status_changed',
+        entity_id: p.id,
+        project_id: p.project_id,
+        summary: `Plan blessed: ${p.title}`,
+        source: p.source,
+        extra: { new_status: 'blessed' },
+      });
+    });
+
+    const { data: completedPlans, error: cpErr } = await applyProjectFilter(
+      supabase.from('plans').select('id, project_id, title, status, source, completed_at')
+        .not('completed_at', 'is', null).gte('completed_at', sinceIso).lte('completed_at', untilIso)
+    );
+    if (cpErr) throw new Error(`plans completed: ${cpErr.message}`);
+    (completedPlans ?? []).forEach((p: any) => {
+      pushEvent({
+        timestamp: p.completed_at,
+        entity_type: 'plan',
+        event_type: 'plan_status_changed',
+        entity_id: p.id,
+        project_id: p.project_id,
+        summary: `Plan ${p.status}: ${p.title}`,
+        source: p.source,
+        extra: { new_status: p.status },
+      });
+    });
+  }
+
+  // ── Notes: added ──
+  if (allowEntity('note')) {
+    const { data: notes, error } = await applyProjectFilter(
+      supabase.from('notes').select('id, project_id, content, topic, source, created_at')
+        .gte('created_at', sinceIso).lte('created_at', untilIso)
+    );
+    if (error) throw new Error(`notes activity: ${error.message}`);
+    (notes ?? []).forEach((n: any) => {
+      const preview = n.content.length > 120 ? n.content.slice(0, 117) + '...' : n.content;
+      pushEvent({
+        timestamp: n.created_at,
+        entity_type: 'note',
+        event_type: 'added',
+        entity_id: n.id,
+        project_id: n.project_id,
+        summary: `Note${n.topic ? ` [${n.topic}]` : ''}: ${preview}`,
+        source: n.source,
+      });
+    });
+  }
+
+  // ── Lessons: added ──
+  if (allowEntity('lesson')) {
+    const { data: lessons, error } = await applyProjectFilter(
+      supabase.from('lessons').select('id, project_id, situation, lesson, severity, source, created_at')
+        .gte('created_at', sinceIso).lte('created_at', untilIso)
+    );
+    if (error) throw new Error(`lessons activity: ${error.message}`);
+    (lessons ?? []).forEach((l: any) => {
+      pushEvent({
+        timestamp: l.created_at,
+        entity_type: 'lesson',
+        event_type: 'added',
+        entity_id: l.id,
+        project_id: l.project_id,
+        summary: `Lesson (${l.severity}): ${l.lesson}`,
+        source: l.source,
+      });
+    });
+  }
+
+  // ── Status snapshots: added ──
+  if (allowEntity('snapshot')) {
+    const { data: snaps, error } = await applyProjectFilter(
+      supabase.from('status_snapshots').select('id, project_id, narrative, source, created_at')
+        .gte('created_at', sinceIso).lte('created_at', untilIso)
+    );
+    if (error) throw new Error(`snapshots activity: ${error.message}`);
+    (snaps ?? []).forEach((s: any) => {
+      const preview = s.narrative.length > 120 ? s.narrative.slice(0, 117) + '...' : s.narrative;
+      pushEvent({
+        timestamp: s.created_at,
+        entity_type: 'snapshot',
+        event_type: 'added',
+        entity_id: s.id,
+        project_id: s.project_id,
+        summary: `Status snapshot: ${preview}`,
+        source: s.source,
+      });
+    });
+  }
+
+  // Sort chronologically, most recent first
+  events.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  const truncated = events.slice(0, limit);
+
+  // Counts by event_type for the header
+  const counts: Record<string, number> = {};
+  for (const e of events) {
+    const key = `${e.entity_type}.${e.event_type}`;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+
+  return JSON.stringify({
+    window: { since: sinceIso, until: untilIso },
+    scope: args.project_slug ? { project_slug: args.project_slug } : { project_slug: 'ALL' },
+    filters: {
+      entity_types: entityTypes ?? null,
+      event_types: eventTypes ?? null,
+    },
+    total_events: events.length,
+    returned: truncated.length,
+    counts_by_entity_event: counts,
+    events: truncated,
+  }, null, 2);
+}
+
+// ─────────────────────────────────────────────────────────
 // Project listing and state bootstrap
 // ─────────────────────────────────────────────────────────
 
