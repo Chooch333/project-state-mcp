@@ -1144,7 +1144,7 @@ async function completeNextMove(supabase: SupabaseClient, args: Args): Promise<s
 async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.plan(args.title, args.content));
-  const tags = normTags(args.tags);
+  const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
   const { data, error } = await supabase.from('plans').insert({
     project_id: projectId,
     title: args.title,
@@ -1154,7 +1154,7 @@ async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> 
     embedding: toPgVector(embedding),
   }).select('id, title, status, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify(data, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
 
 async function updatePlanStatus(supabase: SupabaseClient, args: Args): Promise<string> {
