@@ -1086,7 +1086,7 @@ async function updateAssumption(supabase: SupabaseClient, args: Args): Promise<s
 async function addBlocker(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.blocker(args.question, args.context));
-  const tags = normTags(args.tags);
+  const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
   const { data, error } = await supabase.from('blockers').insert({
     project_id: projectId,
     question: args.question,
@@ -1096,7 +1096,7 @@ async function addBlocker(supabase: SupabaseClient, args: Args): Promise<string>
     embedding: toPgVector(embedding),
   }).select('id, question, context, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify(data, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
 
 async function resolveBlocker(supabase: SupabaseClient, args: Args): Promise<string> {
