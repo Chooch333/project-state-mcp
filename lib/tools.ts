@@ -207,7 +207,7 @@ export const TOOLS = [
   },
   {
     name: 'log_decision',
-    description: 'Record a closed decision with rationale. Immutable once written; to change, use supersede_decision. Always try to supply provenance — a short note on what you consulted to reach this decision (web searches, MCP tool calls, uploaded files, prior decisions). If you can not articulate it, ask the user or leave it empty and the response will warn you to fill it in later. Never fabricate a generic placeholder.',
+    description: 'Record a closed decision with rationale. Immutable once written; to change, use supersede_decision. Always try to supply provenance — a short note on what you consulted to reach this decision (web searches, MCP tool calls, uploaded files, prior decisions). If you can not articulate it, ask the user or leave it empty and the response will warn you to fill it in later. Never fabricate a generic placeholder. Pass optional decided_at to backdate when seeding decisions from old chats.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -218,6 +218,7 @@ export const TOOLS = [
         provenance: { type: 'string', description: 'Show your work: what you consulted (web searches, MCP tools, uploaded files, prior decisions). Strongly preferred; ask the user if unclear; never fabricate.' },
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
+        decided_at: { type: 'string', description: 'Optional ISO 8601 timestamp override — use when the decision was actually made on a prior date (seeding from old chats). Defaults to now().' },
       },
       required: ['project_slug', 'title', 'rationale', 'source'],
     },
