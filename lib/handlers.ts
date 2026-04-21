@@ -79,6 +79,10 @@ export async function callTool(name: string, args: Args): Promise<string> {
       return completeNextMove(supabase, args);
     case 'write_plan':
       return writePlan(supabase, args);
+    case 'update_plan_content':
+      return updatePlanContent(supabase, args);
+    case 'get_plan_revisions':
+      return getPlanRevisions(supabase, args);
     case 'update_plan_status':
       return updatePlanStatus(supabase, args);
     case 'get_plan':
