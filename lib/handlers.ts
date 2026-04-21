@@ -602,14 +602,14 @@ async function getProjectState(supabase: SupabaseClient, args: Args): Promise<st
   const state = {
     project: project.data,
     latest_snapshot: snapshot.data,
-    active_decisions: decisions.data ?? [],
+    active_decisions: activeDecisions,
     active_assumptions: assumptions.data ?? [],
     open_blockers: blockers.data ?? [],
     open_next_moves: nextMoves.data ?? [],
     recent_notes: notes.data ?? [],
     recent_lessons: lessons.data ?? [],
     counts: {
-      decisions: decisions.data?.length ?? 0,
+      decisions: activeDecisions.length,
       assumptions: assumptions.data?.length ?? 0,
       blockers: blockers.data?.length ?? 0,
       next_moves: nextMoves.data?.length ?? 0,
