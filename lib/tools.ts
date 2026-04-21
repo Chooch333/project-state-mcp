@@ -61,12 +61,13 @@ export const TOOLS = [
   },
   {
     name: 'search_state',
-    description: 'Semantic search across all project-state content. Returns the most relevant rows by meaning, not just keyword match.',
+    description: 'Semantic search across project-state content. Returns the most relevant rows by meaning, not just keyword match. SCOPE: you must pass project_slug to search within one project, or all_projects=true to explicitly search across every project. Omitting both is an error — this prevents accidental cross-project leakage. Each result row includes project_slug so you can see which project it came from.',
     inputSchema: {
       type: 'object',
       properties: {
         query: { type: 'string' },
-        project_slug: { type: 'string' },
+        project_slug: { type: 'string', description: 'Limit search to one project.' },
+        all_projects: { type: 'boolean', description: 'Explicitly opt into cross-project search. Set true ONLY when the user explicitly asks for cross-project search.' },
         entity_types: {
           type: 'array',
           items: { type: 'string', enum: ['decision', 'assumption', 'blocker', 'next_move', 'plan', 'snapshot', 'note', 'lesson'] },
@@ -78,13 +79,14 @@ export const TOOLS = [
   },
   {
     name: 'find_by_tags',
-    description: 'Exact-tag retrieval across all entity types. Faster and deterministic compared to search_state.',
+    description: 'Exact-tag retrieval across entity types, with fuzzy expansion so "photo" also matches rows tagged "photos" or "photo-upload". SCOPE: you must pass project_slug to search within one project, or all_projects=true to explicitly search across every project. Omitting both is an error. Each result row includes project_slug.',
     inputSchema: {
       type: 'object',
       properties: {
         tags: { type: 'array', items: { type: 'string' } },
         match_mode: { type: 'string', enum: ['any', 'all'], description: 'Default: any.' },
-        project_slug: { type: 'string' },
+        project_slug: { type: 'string', description: 'Limit to one project.' },
+        all_projects: { type: 'boolean', description: 'Explicitly opt into cross-project tag search.' },
         entity_types: {
           type: 'array',
           items: { type: 'string', enum: ['decision', 'assumption', 'blocker', 'next_move', 'plan', 'snapshot', 'note', 'lesson'] },
