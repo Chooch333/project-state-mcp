@@ -17,29 +17,120 @@ export const TOOLS = [
   },
   {
     name: 'get_project_state',
-    description: 'Pull the full current state of a project: active decisions, active assumptions, open blockers, open next_moves, and the latest status snapshot. This is the "bootstrap a new chat" call.',
+    description: 'Pull the full current state of a project: active decisions, active assumptions, open blockers, open next_moves, the latest status snapshot, recent notes, and recent lessons. This is the "bootstrap a new chat" call.',
     inputSchema: {
       type: 'object',
       properties: {
-        project_slug: {
-          type: 'string',
-          description: 'The project slug, e.g. "family-trip-app".',
-        },
+        project_slug: { type: 'string' },
+        recent_notes_limit: { type: 'number', description: 'How many recent notes to include. Default 20.' },
+        recent_lessons_limit: { type: 'number', description: 'How many recent lessons to include. Default 10.' },
       },
       required: ['project_slug'],
     },
   },
   {
-    name: 'log_decision',
-    description: 'Record a closed decision with rationale. Decisions are immutable once written; to change, use supersede_decision.',
+    name: 'search_state',
+    description: 'Semantic search across all project-state content (decisions, assumptions, blockers, next_moves, plans, snapshots, notes, lessons). Returns the most relevant rows by meaning, not just keyword match. Use this when you need to find things related to a topic without knowing exactly where they were logged.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What to search for. Can be a question, a topic, or a description.' },
+        project_slug: { type: 'string', description: 'Optional: limit search to one project. Omit to search across all projects.' },
+        entity_types: {
+          type: 'array',
+          items: { type: 'string', enum: ['decision', 'assumption', 'blocker', 'next_move', 'plan', 'snapshot', 'note', 'lesson'] },
+          description: 'Optional: filter to specific entity types.',
+        },
+        limit: { type: 'number', description: 'Max results. Default 10.' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'create_project',
+    description: 'Register a new project in the state database. Use this to onboard a project before any other writes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: { type: 'string', description: 'Stable, kebab-case identifier, e.g. "family-trip-app".' },
+        name: { type: 'string' },
+        description: { type: 'string' },
+        repo_url: { type: 'string' },
+        supabase_project_id: { type: 'string' },
+        vercel_project_id: { type: 'string' },
+      },
+      required: ['slug', 'name'],
+    },
+  },
+  {
+    name: 'add_note',
+    description: 'Low-friction capture. Use for anything worth remembering that does not yet fit a structured entity — observations, half-baked ideas, context, things mentioned in passing. Prefer this over forcing content into a decision or blocker when uncertain. Can be promoted later via promote_note.',
     inputSchema: {
       type: 'object',
       properties: {
         project_slug: { type: 'string' },
-        title: { type: 'string', description: 'Short title of the decision, e.g. "Photos stored in Supabase Storage".' },
-        rationale: { type: 'string', description: 'Why this was decided.' },
-        alternatives_considered: { type: 'string', description: 'Optional: what other options were weighed.' },
-        source: { type: 'string', description: 'Who/what recorded this. E.g. "charles", "chat:trip-app-v27", "orchestrator".' },
+        content: { type: 'string', description: 'The note text. Any length.' },
+        topic: { type: 'string', description: 'Optional tag for retrieval, e.g. "auth", "photos", "build-manager".' },
+        source: { type: 'string' },
+      },
+      required: ['project_slug', 'content', 'source'],
+    },
+  },
+  {
+    name: 'promote_note',
+    description: 'Convert an existing note into a structured entity (decision, assumption, blocker, next_move, or lesson). The original note is preserved with a pointer to the promoted entity. Use when a note has earned its promotion — e.g. a loose observation has become a clear decision.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        note_id: { type: 'string' },
+        target_entity: { type: 'string', enum: ['decision', 'assumption', 'blocker', 'next_move', 'lesson'] },
+        // Fields needed by the target entity — provide whichever are required for target
+        title: { type: 'string' },
+        rationale: { type: 'string' },
+        alternatives_considered: { type: 'string' },
+        statement: { type: 'string' },
+        alternatives: { type: 'string' },
+        question: { type: 'string' },
+        context: { type: 'string' },
+        description: { type: 'string' },
+        priority: { type: 'string', enum: ['urgent', 'normal', 'someday'] },
+        estimated_effort: { type: 'string', enum: ['small', 'medium', 'large'] },
+        situation: { type: 'string' },
+        lesson: { type: 'string' },
+        applies_to: { type: 'string' },
+        severity: { type: 'string', enum: ['minor', 'normal', 'major'] },
+        source: { type: 'string' },
+      },
+      required: ['note_id', 'target_entity', 'source'],
+    },
+  },
+  {
+    name: 'add_lesson',
+    description: 'Record a retrospective observation: what happened, what we learned. Use for "we built X and it didn\'t work because Y," "tried approach Z, here\'s why we abandoned it," or general insight from a completed piece of work.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_slug: { type: 'string' },
+        situation: { type: 'string', description: 'What happened or what was tried.' },
+        lesson: { type: 'string', description: 'What we learned from it.' },
+        applies_to: { type: 'string', description: 'Optional: context tags for future retrieval.' },
+        severity: { type: 'string', enum: ['minor', 'normal', 'major'] },
+        source: { type: 'string' },
+      },
+      required: ['project_slug', 'situation', 'lesson', 'source'],
+    },
+  },
+  {
+    name: 'log_decision',
+    description: 'Record a closed decision with rationale. Decisions are immutable once written; to change, use supersede_decision. Use only when something is genuinely settled — for in-progress thinking, use add_note.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_slug: { type: 'string' },
+        title: { type: 'string' },
+        rationale: { type: 'string' },
+        alternatives_considered: { type: 'string' },
+        source: { type: 'string' },
       },
       required: ['project_slug', 'title', 'rationale', 'source'],
     },
@@ -173,7 +264,7 @@ export const TOOLS = [
       type: 'object',
       properties: {
         plan_id: { type: 'string' },
-        project_slug: { type: 'string', description: 'If provided without plan_id, returns the most recent plan for this project.' },
+        project_slug: { type: 'string' },
       },
     },
   },
@@ -188,22 +279,6 @@ export const TOOLS = [
         source: { type: 'string' },
       },
       required: ['project_slug', 'narrative', 'source'],
-    },
-  },
-  {
-    name: 'create_project',
-    description: 'Register a new project in the state database. Use this to onboard a project before any other writes.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        slug: { type: 'string', description: 'Stable, kebab-case identifier, e.g. "family-trip-app".' },
-        name: { type: 'string' },
-        description: { type: 'string' },
-        repo_url: { type: 'string' },
-        supabase_project_id: { type: 'string' },
-        vercel_project_id: { type: 'string' },
-      },
-      required: ['slug', 'name'],
     },
   },
 ] as const;
