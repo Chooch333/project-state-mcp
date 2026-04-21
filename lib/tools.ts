@@ -244,7 +244,7 @@ export const TOOLS = [
   },
   {
     name: 'get_decision_chain',
-    description: 'Walk the supersession history for a decision. Given any decision ID, returns the full chain: every predecessor decision (walking backward via supersedes pointers) and every successor decision (walking forward by finding decisions that supersede this one). Each transition shows the change_reason, so you can see how thinking evolved. Use when the person asks "how did we land on X," "what was the original decision about X," "why did we change from Y to Z," or anything about a decision''s history.',
+    description: 'Walk the supersession history for a decision. Given any decision ID, returns the full chain: every predecessor decision (walking backward via supersedes pointers) and every successor decision (walking forward by finding decisions that supersede this one). Each transition shows the change_reason, so you can see how thinking evolved. Use when the person asks "how did we land on X," "what was the original decision about X," "why did we change from Y to Z," or anything about decision history.',
     inputSchema: {
       type: 'object',
       properties: {
