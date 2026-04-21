@@ -280,7 +280,7 @@ export const TOOLS = [
   },
   {
     name: 'add_assumption',
-    description: 'Record an active assumption with alternatives.',
+    description: 'Record an active assumption with alternatives. Pass optional observed_at to backdate.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -289,6 +289,7 @@ export const TOOLS = [
         alternatives: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
+        observed_at: { type: 'string', description: 'Optional ISO 8601 timestamp override — when the assumption was first observed. Defaults to now().' },
       },
       required: ['project_slug', 'statement', 'source'],
     },
