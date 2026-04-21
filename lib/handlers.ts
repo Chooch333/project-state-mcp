@@ -1,16 +1,18 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabase, resolveProjectId } from './supabase';
 import { embed, toPgVector, composeEmbeddingText } from './embeddings';
+import {
+  normalizeTags,
+  normalizeAndReconcile,
+  expandForQuery,
+} from './tags';
 
 type Args = Record<string, any>;
 
-// Normalize incoming tags: coerce undefined/null to [], strip empty strings, deduplicate, lowercase for consistency.
+// Kept as a thin fallback for call sites that don't need DB-side reconciliation.
+// Most write paths should use normalizeAndReconcile (async) instead.
 function normTags(tags: any): string[] {
-  if (!Array.isArray(tags)) return [];
-  const cleaned = tags
-    .filter((t) => typeof t === 'string' && t.trim().length > 0)
-    .map((t) => t.trim().toLowerCase());
-  return Array.from(new Set(cleaned));
+  return normalizeTags(tags);
 }
 
 // Table names per entity type (single source of truth)
