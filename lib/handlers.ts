@@ -241,6 +241,15 @@ function daysAgo(then: Date, now: Date): number {
 // ─────────────────────────────────────────────────────────
 
 async function getActivity(supabase: SupabaseClient, args: Args): Promise<string> {
+  // Guardrail: require explicit scope choice.
+  if (!args.project_slug && args.all_projects !== true) {
+    throw new Error(
+      'Scope is required. Pass project_slug to see activity within one project, ' +
+      'or pass all_projects=true to explicitly see activity across every project. ' +
+      'This guardrail prevents accidental cross-project leakage.'
+    );
+  }
+
   const now = new Date();
   const relativeDays = typeof args.relative_days === 'number' ? args.relative_days : 7;
   const since = args.since ? new Date(args.since) : new Date(now.getTime() - relativeDays * 24 * 60 * 60 * 1000);
