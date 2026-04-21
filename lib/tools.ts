@@ -196,7 +196,7 @@ export const TOOLS = [
   },
   {
     name: 'log_decision',
-    description: 'Record a closed decision with rationale. Immutable once written; to change, use supersede_decision.',
+    description: 'Record a closed decision with rationale. Immutable once written; to change, use supersede_decision. Always try to supply provenance — a short note on what you consulted to reach this decision (web searches, MCP tool calls, uploaded files, prior decisions). If you can not articulate it, ask the user or leave it empty and the response will warn you to fill it in later. Never fabricate a generic placeholder.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -204,6 +204,7 @@ export const TOOLS = [
         title: { type: 'string' },
         rationale: { type: 'string' },
         alternatives_considered: { type: 'string' },
+        provenance: { type: 'string', description: 'Show your work: what you consulted (web searches, MCP tools, uploaded files, prior decisions). Strongly preferred; ask the user if unclear; never fabricate.' },
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
       },
@@ -212,7 +213,7 @@ export const TOOLS = [
   },
   {
     name: 'supersede_decision',
-    description: 'Replace an existing decision with a new one. The old decision remains in history. Always try to supply change_reason — a short explanation of why we are moving from the old decision to this new one. This is distinct from new_rationale: rationale justifies the new decision on its own terms; change_reason explains the transition. If you are not sure of the reason, ASK the user rather than fabricating a generic placeholder. If the user does not know and tells you to proceed, call this tool without change_reason and the response will include a warning that you should relay to the user. Never invent a default like "general improvement" — a null change_reason is more useful than a meaningless one.',
+    description: 'Replace an existing decision with a new one. The old decision remains in history. Always try to supply change_reason (why moving from old to new) and provenance (what you consulted). Both are preferred; if unclear, ASK the user rather than fabricating a placeholder. If left empty the response will include warnings you should relay to the user.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -220,7 +221,8 @@ export const TOOLS = [
         new_title: { type: 'string' },
         new_rationale: { type: 'string', description: 'Why the new decision is right on its own terms.' },
         new_alternatives_considered: { type: 'string' },
-        change_reason: { type: 'string', description: 'Why we are moving from the old decision to this new one. Strongly preferred — ask the user if unclear, never fabricate.' },
+        change_reason: { type: 'string', description: 'Why we are moving from the old decision to this new one. Ask the user if unclear.' },
+        provenance: { type: 'string', description: 'Show your work: what you consulted. Ask the user if unclear.' },
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
       },
