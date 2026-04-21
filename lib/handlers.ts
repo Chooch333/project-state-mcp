@@ -1484,8 +1484,22 @@ async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> 
     tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, title, status, provenance, tags, source, created_at').single();
+  }).select('id, title, status, provenance, tags, source, current_revision, created_at').single();
   if (error) throw new Error(error.message);
+
+  // Seed revision 1 with the initial content. Change_reason is implicit ("initial write") on revision 1.
+  const { error: revErr } = await supabase.from('plan_revisions').insert({
+    plan_id: data.id,
+    revision_number: 1,
+    title: args.title,
+    content: args.content,
+    change_reason: 'Initial plan.',
+    source: args.source,
+  });
+  if (revErr) {
+    // Non-fatal: plan is written. Log and continue.
+    console.error('Failed to seed revision 1:', revErr.message);
+  }
 
   const response: any = { ...data, tag_substitutions: substitutions };
   if (!provenance) {
