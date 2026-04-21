@@ -31,6 +31,8 @@ export async function callTool(name: string, args: Args): Promise<string> {
   switch (name) {
     case 'get_project_dashboard':
       return getProjectDashboard(supabase, args);
+    case 'get_activity':
+      return getActivity(supabase, args);
     case 'list_projects':
       return listProjects(supabase, args);
     case 'get_project_state':
