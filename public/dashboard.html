@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project State Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root {
+      --bg: #fafaf9;
+      --surface: #ffffff;
+      --border: #e7e5e4;
+      --border-strong: #d6d3d1;
+      --text: #1c1917;
+      --text-muted: #78716c;
+      --text-subtle: #a8a29e;
+      --accent: #b45309;
+      --accent-bg: #fef3c7;
+      --urgent: #b91c1c;
+      --urgent-bg: #fee2e2;
+      --good: #15803d;
+      --good-bg: #dcfce7;
+      --info: #0369a1;
+      --info-bg: #dbeafe;
+      --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06);
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      font-size: 15px;
+    }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    header h1 span {
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+    .project-selector {
+      padding: 6px 10px;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      background: var(--surface);
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      cursor: pointer;
+      min-width: 220px;
+    }
+    .project-selector:hover { border-color: var(--text-muted); }
+    .header-spacer { flex: 1; }
+    .header-btn {
+      padding: 6px 12px;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      background: var(--surface);
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .header-btn:hover {
+      color: var(--text);
+      background: var(--bg);
+    }
+    nav.tabs {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      gap: 2px;
+      overflow-x: auto;
+    }
+    .tab-btn {
+      padding: 10px 16px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      margin-bottom: -1px;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active {
+      color: var(--text);
+      border-bottom-color: var(--accent);
+      font-weight: 500;
+    }
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }
+    .card h2 {
+      margin: 0 0 12px 0;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .card h2 .count {
+      color: var(--text-subtle);
+      font-weight: 400;
+      margin-left: 6px;
+    }
+    .status-line {
+      font-size: 16px;
+      color: var(--text);
+      margin-bottom: 6px;
+      line-height: 1.5;
+    }
+    .status-meta {
+      font-size: 13px;
+      color: var(--text-subtle);
+    }
+    .row-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 700px) {
+      .row-grid { grid-template-columns: 1fr; }
+    }
+    .scale-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+    }
+    .scale-item {
+      padding: 10px 12px;
+      background: var(--bg);
+      border-radius: 6px;
+      text-align: center;
+    }
+    .scale-num {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.1;
+    }
+    .scale-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-top: 4px;
+    }
+    .item {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .item:last-child { border-bottom: none; padding-bottom: 0; }
+    .item:first-child { padding-top: 0; }
+    .item-title {
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .item-body {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .item-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--text-subtle);
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .badge-urgent { background: var(--urgent-bg); color: var(--urgent); }
+    .badge-normal { background: var(--info-bg); color: var(--info); }
+    .badge-someday { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border-strong); }
+    .badge-good { background: var(--good-bg); color: var(--good); }
+    .badge-warn { background: var(--accent-bg); color: var(--accent); }
+    .badge-muted { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
+    .tag {
+      display: inline-block;
+      padding: 1px 7px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .empty {
+      padding: 14px 0;
+      color: var(--text-subtle);
+      font-size: 14px;
+      font-style: italic;
+    }
+    .error {
+      background: var(--urgent-bg);
+      color: var(--urgent);
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .loading {
+      color: var(--text-subtle);
+      padding: 20px 0;
+      text-align: center;
+      font-size: 14px;
+    }
+    .rationale {
+      margin-top: 6px;
+      padding: 8px 12px;
+      background: var(--bg);
+      border-left: 2px solid var(--border-strong);
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .days-open {
+      font-weight: 500;
+    }
+    .days-open.urgent-days { color: var(--urgent); }
+    .days-open.warn-days { color: var(--accent); }
+    .about-content {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 36px;
+      line-height: 1.65;
+      font-size: 15px;
+      box-shadow: var(--shadow);
+    }
+    .about-content h1 { font-size: 26px; margin-top: 0; }
+    .about-content h2 { font-size: 19px; margin-top: 1.8em; }
+    .about-content p { color: var(--text); }
+    .about-content strong { color: var(--text); }
+    .about-content code {
+      background: var(--bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    .token-prompt {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .token-box {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      max-width: 420px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    }
+    .token-box h3 { margin-top: 0; }
+    .token-box p {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+    .token-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+    .token-submit {
+      padding: 8px 16px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .token-submit:hover { background: #92400e; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Project State <span>/ dashboard</span></h1>
+    <select id="project-selector" class="project-selector">
+      <option value="">Loading projects...</option>
+    </select>
+    <div class="header-spacer"></div>
+    <button class="header-btn" id="refresh-btn" title="Refresh">↻ Refresh</button>
+    <button class="header-btn" id="logout-btn" title="Clear stored token">Logout</button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="overview">Overview</button>
+    <button class="tab-btn" data-tab="decisions">Decisions</button>
+    <button class="tab-btn" data-tab="plans">Plans</button>
+    <button class="tab-btn" data-tab="notes">Notes</button>
+    <button class="tab-btn" data-tab="lessons">Lessons</button>
+    <button class="tab-btn" data-tab="about">About this system</button>
+  </nav>
+
+  <main>
+    <div id="error-area"></div>
+
+    <div id="overview-tab" class="tab-panel active">
+      <div id="overview-content" class="loading">Loading...</div>
+    </div>
+
+    <div id="decisions-tab" class="tab-panel">
+      <div id="decisions-content" class="loading">Loading...</div>
+    </div>
+
+    <div id="plans-tab" class="tab-panel">
+      <div id="plans-content" class="loading">Loading...</div>
+    </div>
+
+    <div id="notes-tab" class="tab-panel">
+      <div id="notes-content" class="loading">Loading...</div>
+    </div>
+
+    <div id="lessons-tab" class="tab-panel">
+      <div id="lessons-content" class="loading">Loading...</div>
+    </div>
+
+    <div id="about-tab" class="tab-panel">
+      <div id="about-content" class="about-content">Loading...</div>
+    </div>
+  </main>
+
+  <div id="token-prompt" class="token-prompt" style="display:none;">
+    <div class="token-box">
+      <h3>Enter MCP access token</h3>
+      <p>This token is stored in your browser so you don't have to re-enter it. It's the same shared secret used to connect Claude to this MCP.</p>
+      <input type="password" id="token-input" class="token-input" placeholder="Token">
+      <button class="token-submit" id="token-submit">Save and continue</button>
+    </div>
+  </div>
+
+  <script>
+    // ─────────────────────────────────────────────────────────
+    // Embedded about-doc content (mirrors docs/what-this-system-does.md)
+    // ─────────────────────────────────────────────────────────
+    const ABOUT_DOC = `# What This System Does
+
+A cross-chat memory system for the projects you work on with Claude.
+
+## The problem
+
+Every Claude conversation starts empty. If you've been building the Family Trip App across seven chats over three weeks, conversation number eight has no idea what the seven before it decided, assumed, blocked on, or completed. You end up either re-pasting massive context blobs at the start of every new chat, maintaining out-of-band artifacts like "Build Manager" documents that try to summarize state, or simply forgetting what was already figured out.
+
+This MCP gives Claude a shared persistent memory. Every project has state — decisions made, assumptions held, blockers open, next moves queued, plans drafted, lessons learned, status snapshots written. That state lives in a Postgres database and is available to every Claude conversation that has this MCP connected. A chat picked up next week starts where the last one ended.
+
+## What gets tracked
+
+Eight entity types, ordered roughly by commitment level:
+
+**Note** is low-friction capture. Anything worth remembering that doesn't yet fit a structured shape. "I think the accommodation-per-day thing might be worth revisiting" — that's a note. A note can later be promoted into any of the structured entities below when its shape becomes clear.
+
+**Assumption** is something believed to be true without verification. "Users will mostly add stops before deciding on accommodations." Assumptions have a status — active, confirmed, or invalidated — that transitions as reality pushes back.
+
+**Blocker** is an open question or external dependency stopping progress. "Should we use Google Places for photos or upload our own?" A blocker resolves when someone answers or the dependency lifts.
+
+**Next move** is a concrete action. Has a priority (urgent, normal, someday) and an estimated effort (small, medium, large). Completes when done.
+
+**Decision** is a closed commitment that shapes what gets built. Immutable once written — to change a decision, you supersede it, which leaves the old one in history and adds a new one that points back. Each decision carries rationale (why this is correct on its own terms), optional change_reason (when superseding: why we moved from the old to the new), and optional provenance (what was consulted — web searches, MCP queries, uploaded files, prior decisions).
+
+**Plan** is a structured document describing how something will be built. Goes through a lifecycle: draft → blessed → executing → complete (or abandoned). Plan content is versioned — every edit creates a new entry in plan_revisions, so you can walk back through the evolution of a plan.
+
+**Lesson** is a retrospective observation. What happened, what to do differently. Carries severity (minor, normal, major).
+
+**Snapshot** is a narrative summary of where a project is right now. Written periodically to capture the feel of the moment, not just the structured state.
+
+## Standing principles
+
+**The system carries discipline, not the user.** The server normalizes incoming tags, reconciles near-duplicates against existing tags in the same project scope, regenerates embeddings on content changes, and defaults to safe behavior. You tag and write however is natural.
+
+**Silent work, visible narration.** When the server does something nontrivial, it surfaces what it did in the response. Claude relays this to you conversationally without making you ask.
+
+**Never fabricate defaults.** If change_reason or provenance is unknown, the server stores null and returns a warning. A null field is more honest than a meaningless placeholder.
+
+**Explicit opt-in for cross-project work.** Any read that could span projects requires either project_slug or all_projects=true. Omitting both is a hard error.
+
+**Soft-requirement pattern.** Fields like change_reason and provenance are strongly preferred but not strictly required. Missing surfaces a warning — never blocks the write.
+
+**Timestamp overrides for retroactive logging.** Most write tools accept optional timestamp overrides so historical data from old chats can be seeded with accurate dates.
+
+## Using it well
+
+**Default to notes when unsure.** If you're not sure whether something is a decision or an assumption or just a thought — write a note. Promotion is easy; reclassification is costly.
+
+**Write sources that identify you.** Every write takes a source field naming who made the entry. Future readers want to know where entries came from.
+
+**Tag liberally.** The server reconciles near-duplicates automatically; you don't need to maintain canonical vocabulary by hand.
+
+**Treat warnings as prompts, not errors.** A warning that change_reason is missing is a signal to ask, not to ignore.
+
+## What this system doesn't do
+
+It doesn't plan for you. It captures thinking you've already done.
+
+It doesn't impose structure on how you think.
+
+It doesn't model relationships between ideas. "Decision A depends on assumption B" is prose in the rationale, not a graph edge.
+
+It doesn't substitute for your judgment. Claude will ask you when provenance or reasoning is unclear. You're the source of truth.`;
+
+    // ─────────────────────────────────────────────────────────
+    // MCP client
+    // ─────────────────────────────────────────────────────────
+    const TOKEN_KEY = 'projectStateMcpToken';
+    let rpcId = 0;
+    let currentProject = localStorage.getItem('projectStateCurrentProject') || null;
+
+    function getToken() {
+      return localStorage.getItem(TOKEN_KEY);
+    }
+
+    function setToken(t) {
+      localStorage.setItem(TOKEN_KEY, t);
+    }
+
+    function clearToken() {
+      localStorage.removeItem(TOKEN_KEY);
+    }
+
+    function promptForToken() {
+      document.getElementById('token-prompt').style.display = 'flex';
+      document.getElementById('token-input').focus();
+    }
+
+    async function callMcp(toolName, args) {
+      const token = getToken();
+      if (!token) {
+        promptForToken();
+        throw new Error('No token — prompted user');
+      }
+      rpcId++;
+      const resp = await fetch('/api/mcp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: rpcId,
+          method: 'tools/call',
+          params: { name: toolName, arguments: args || {} }
+        })
+      });
+      if (resp.status === 401 || resp.status === 403) {
+        clearToken();
+        promptForToken();
+        throw new Error('Auth failed — token cleared, please re-enter');
+      }
+      if (!resp.ok) {
+        throw new Error('MCP HTTP ' + resp.status + ': ' + (await resp.text()));
+      }
+      const data = await resp.json();
+      if (data.error) {
+        throw new Error('MCP error: ' + (data.error.message || JSON.stringify(data.error)));
+      }
+      if (!data.result || !data.result.content || !data.result.content[0]) {
+        throw new Error('Unexpected MCP response shape');
+      }
+      // Tool results come back as JSON-in-text
+      try {
+        return JSON.parse(data.result.content[0].text);
+      } catch (e) {
+        return data.result.content[0].text; // some tools return plain strings
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Utility
+    // ─────────────────────────────────────────────────────────
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatTags(tags) {
+      if (!tags || tags.length === 0) return '';
+      return tags.map(t => '<span class="tag">' + escapeHtml(t) + '</span>').join(' ');
+    }
+
+    function daysClass(days) {
+      if (days >= 14) return 'urgent-days';
+      if (days >= 7) return 'warn-days';
+      return '';
+    }
+
+    function showError(msg) {
+      const area = document.getElementById('error-area');
+      area.innerHTML = '<div class="error">' + escapeHtml(msg) + '</div>';
+    }
+
+    function clearError() {
+      document.getElementById('error-area').innerHTML = '';
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Project selector
+    // ─────────────────────────────────────────────────────────
+    async function loadProjects() {
+      try {
+        const projects = await callMcp('list_projects', {});
+        const sel = document.getElementById('project-selector');
+        sel.innerHTML = '';
+        if (!projects || projects.length === 0) {
+          sel.innerHTML = '<option value="">No projects yet</option>';
+          return;
+        }
+        projects.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.slug;
+          opt.textContent = p.name;
+          sel.appendChild(opt);
+        });
+        // Restore last selection, or pick first
+        if (currentProject && projects.some(p => p.slug === currentProject)) {
+          sel.value = currentProject;
+        } else {
+          currentProject = projects[0].slug;
+          sel.value = currentProject;
+          localStorage.setItem('projectStateCurrentProject', currentProject);
+        }
+        await loadCurrentTab();
+      } catch (e) {
+        showError(e.message);
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Overview tab
+    // ─────────────────────────────────────────────────────────
+    async function renderOverview() {
+      const el = document.getElementById('overview-content');
+      el.innerHTML = '<div class="loading">Loading...</div>';
+      try {
+        const d = await callMcp('get_project_dashboard', { project_slug: currentProject });
+
+        let html = '';
+
+        // Project header card
+        html += '<div class="card">';
+        html += '<h2>' + escapeHtml(d.project.name) + '</h2>';
+        if (d.project.description) {
+          html += '<div class="status-line">' + escapeHtml(d.project.description) + '</div>';
+        }
+        if (d.project.repo_url) {
+          html += '<div class="status-meta">Repo: <a href="' + escapeHtml(d.project.repo_url) + '" target="_blank" rel="noopener">' + escapeHtml(d.project.repo_url) + '</a></div>';
+        }
+        html += '</div>';
+
+        // Status card
+        html += '<div class="card">';
+        html += '<h2>Status</h2>';
+        html += '<div class="status-line">' + escapeHtml(d.status.line) + '</div>';
+        const ageBits = [];
+        if (d.status.days_old !== null && d.status.days_old !== undefined) ageBits.push(d.status.days_old + ' days old');
+        if (d.status.source) ageBits.push('via ' + escapeHtml(d.status.source));
+        if (ageBits.length) html += '<div class="status-meta">' + ageBits.join(' · ') + '</div>';
+        html += '</div>';
+
+        // Attention row: blockers + urgent next moves side-by-side
+        html += '<div class="row-grid">';
+
+        // Open blockers
+        html += '<div class="card">';
+        html += '<h2>Open blockers <span class="count">' + d.attention.open_blockers.length + '</span></h2>';
+        if (d.attention.open_blockers.length === 0) {
+          html += '<div class="empty">Nothing blocked right now.</div>';
+        } else {
+          d.attention.open_blockers.forEach(b => {
+            html += '<div class="item">';
+            html += '<div class="item-title">' + escapeHtml(b.question) + '</div>';
+            if (b.context) html += '<div class="item-body">' + escapeHtml(b.context) + '</div>';
+            html += '<div class="item-meta">';
+            html += '<span class="days-open ' + daysClass(b.days_open) + '">Open ' + b.days_open + ' days</span>';
+            if (b.tags && b.tags.length) html += formatTags(b.tags);
+            html += '</div>';
+            html += '</div>';
+          });
+        }
+        html += '</div>';
+
+        // Urgent next moves
+        html += '<div class="card">';
+        html += '<h2>Urgent next moves <span class="count">' + d.attention.urgent_next_moves.length + '</span></h2>';
+        if (d.attention.urgent_next_moves.length === 0) {
+          html += '<div class="empty">Nothing marked urgent.</div>';
+        } else {
+          d.attention.urgent_next_moves.forEach(m => {
+            html += '<div class="item">';
+            html += '<div class="item-title">' + escapeHtml(m.description) + '</div>';
+            html += '<div class="item-meta">';
+            html += '<span class="badge badge-urgent">urgent</span>';
+            if (m.estimated_effort) html += '<span class="badge badge-muted">' + escapeHtml(m.estimated_effort) + '</span>';
+            html += '<span class="days-open ' + daysClass(m.days_old) + '">' + m.days_old + ' days old</span>';
+            if (m.tags && m.tags.length) html += formatTags(m.tags);
+            html += '</div>';
+            html += '</div>';
+          });
+        }
+        html += '</div>';
+
+        html += '</div>'; // end row-grid
+
+        // Other next moves
+        if (d.attention.other_open_next_moves_sample && d.attention.other_open_next_moves_sample.length > 0) {
+          html += '<div class="card">';
+          html += '<h2>Other open next moves <span class="count">sample of ' + d.attention.other_open_next_moves_sample.length + '</span></h2>';
+          d.attention.other_open_next_moves_sample.forEach(m => {
+            html += '<div class="item">';
+            html += '<div class="item-title">' + escapeHtml(m.description) + '</div>';
+            html += '<div class="item-meta">';
+            const badge = m.priority === 'someday' ? 'badge-someday' : 'badge-normal';
+            html += '<span class="badge ' + badge + '">' + escapeHtml(m.priority) + '</span>';
+            html += '</div>';
+            html += '</div>';
+          });
+          html += '</div>';
+        }
+
+        // Last 7 days counts
+        html += '<div class="card">';
+        html += '<h2>Last 7 days</h2>';
+        html += '<div class="scale-grid">';
+        const c = d.last_7_days.counts;
+        [
+          ['Decisions added', c.decisions_added],
+          ['Notes added', c.notes_added],
+          ['Lessons added', c.lessons_added],
+          ['Blockers raised', c.blockers_raised],
+          ['Blockers resolved', c.blockers_resolved],
+          ['Moves completed', c.next_moves_completed],
+        ].forEach(([label, n]) => {
+          html += '<div class="scale-item"><div class="scale-num">' + n + '</div><div class="scale-label">' + label + '</div></div>';
+        });
+        html += '</div>';
+        html += '</div>';
+
+        // Scale
+        html += '<div class="card">';
+        html += '<h2>Scale</h2>';
+        html += '<div class="scale-grid">';
+        [
+          ['Active decisions', d.scale.active_decisions],
+          ['Active assumptions', d.scale.active_assumptions],
+          ['Open blockers', d.scale.open_blockers],
+          ['Open next moves', d.scale.open_next_moves],
+          ['Total notes', d.scale.notes_total],
+          ['Total lessons', d.scale.lessons_total],
+          ['Total plans', d.scale.plans_total],
+        ].forEach(([label, n]) => {
+          html += '<div class="scale-item"><div class="scale-num">' + n + '</div><div class="scale-label">' + label + '</div></div>';
+        });
+        html += '</div>';
+        html += '</div>';
+
+        el.innerHTML = html;
+      } catch (e) {
+        el.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Decisions tab
+    // ─────────────────────────────────────────────────────────
+    async function renderDecisions() {
+      const el = document.getElementById('decisions-content');
+      el.innerHTML = '<div class="loading">Loading...</div>';
+      try {
+        const state = await callMcp('get_project_state', { project_slug: currentProject });
+        const decisions = state.active_decisions || [];
+
+        let html = '<div class="card">';
+        html += '<h2>Active decisions <span class="count">' + decisions.length + '</span></h2>';
+        if (decisions.length === 0) {
+          html += '<div class="empty">No decisions yet.</div>';
+        } else {
+          decisions.forEach(dec => {
+            html += '<div class="item">';
+            html += '<div class="item-title">' + escapeHtml(dec.title) + '</div>';
+            html += '<div class="rationale">' + escapeHtml(dec.rationale) + '</div>';
+            if (dec.alternatives_considered) {
+              html += '<div class="item-body" style="margin-top:6px;"><strong>Alternatives:</strong> ' + escapeHtml(dec.alternatives_considered) + '</div>';
+            }
+            if (dec.change_reason) {
+              html += '<div class="item-body" style="margin-top:6px;"><strong>Why changed:</strong> ' + escapeHtml(dec.change_reason) + '</div>';
+            }
+            if (dec.provenance) {
+              html += '<div class="item-body" style="margin-top:6px;"><strong>Based on:</strong> ' + escapeHtml(dec.provenance) + '</div>';
+            }
+            html += '<div class="item-meta">';
+            html += '<span>' + new Date(dec.decided_at).toLocaleDateString() + '</span>';
+            if (dec.supersedes) html += '<span class="badge badge-warn">supersedes prior</span>';
+            if (dec.source) html += '<span>via ' + escapeHtml(dec.source) + '</span>';
+            if (dec.tags && dec.tags.length) html += formatTags(dec.tags);
+            html += '</div>';
+            html += '</div>';
+          });
+        }
+        html += '</div>';
+        el.innerHTML = html;
+      } catch (e) {
+        el.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Plans tab
+    // ─────────────────────────────────────────────────────────
+    async function renderPlans() {
+      const el = document.getElementById('plans-content');
+      el.innerHTML = '<div class="loading">Loading...</div>';
+      try {
+        const result = await callMcp('list_plans', { project_slug: currentProject });
+        const plans = result.plans || [];
+
+        let html = '<div class="card">';
+        html += '<h2>Plans <span class="count">' + plans.length + '</span></h2>';
+        if (plans.length === 0) {
+          html += '<div class="empty">No plans yet.</div>';
+        } else {
+          plans.forEach(p => {
+            html += '<div class="item">';
+            html += '<div class="item-title">' + escapeHtml(p.title) + '</div>';
+            html += '<div class="item-meta">';
+            const statusBadge = ({
+              draft: 'badge-muted',
+              blessed: 'badge-normal',
+              executing: 'badge-warn',
+              complete: 'badge-good',
+              abandoned: 'badge-muted',
+            })[p.status] || 'badge-muted';
+            html += '<span class="badge ' + statusBadge + '">' + escapeHtml(p.status) + '</span>';
+            html += '<span>rev ' + (p.current_revision || 1) + '</span>';
+            html += '<span>' + new Date(p.created_at).toLocaleDateString() + '</span>';
+            if (p.blessed_at) html += '<span>blessed ' + new Date(p.blessed_at).toLocaleDateString() + '</span>';
+            if (p.completed_at) html += '<span>closed ' + new Date(p.completed_at).toLocaleDateString() + '</span>';
+            if (p.source) html += '<span>via ' + escapeHtml(p.source) + '</span>';
+            if (p.tags && p.tags.length) html += formatTags(p.tags);
+            html += '</div>';
+            if (p.provenance) {
+              html += '<div class="item-body" style="margin-top:6px;"><strong>Based on:</strong> ' + escapeHtml(p.provenance) + '</div>';
+            }
+            html += '</div>';
+          });
+        }
+        html += '</div>';
+        el.innerHTML = html;
+      } catch (e) {
+        el.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Notes tab
+    // ─────────────────────────────────────────────────────────
+    async function renderNotes() {
+      const el = document.getElementById('notes-content');
+      el.innerHTML = '<div class="loading">Loading...</div>';
+      try {
+        const state = await callMcp('get_project_state', { project_slug: currentProject, recent_notes_limit: 50 });
+        const notes = state.recent_notes || [];
+
+        let html = '<div class="card">';
+        html += '<h2>Recent notes <span class="count">' + notes.length + '</span></h2>';
+        if (notes.length === 0) {
+          html += '<div class="empty">No notes yet.</div>';
+        } else {
+          notes.forEach(n => {
+            html += '<div class="item">';
+            if (n.topic) {
+              html += '<div class="item-title">' + escapeHtml(n.topic) + '</div>';
+            }
+            html += '<div class="item-body">' + escapeHtml(n.content) + '</div>';
+            html += '<div class="item-meta">';
+            html += '<span>' + new Date(n.created_at).toLocaleDateString() + '</span>';
+            if (n.promoted_to_entity) html += '<span class="badge badge-good">promoted → ' + escapeHtml(n.promoted_to_entity) + '</span>';
+            if (n.source) html += '<span>via ' + escapeHtml(n.source) + '</span>';
+            if (n.tags && n.tags.length) html += formatTags(n.tags);
+            html += '</div>';
+            html += '</div>';
+          });
+        }
+        html += '</div>';
+        el.innerHTML = html;
+      } catch (e) {
+        el.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Lessons tab
+    // ─────────────────────────────────────────────────────────
+    async function renderLessons() {
+      const el = document.getElementById('lessons-content');
+      el.innerHTML = '<div class="loading">Loading...</div>';
+      try {
+        const state = await callMcp('get_project_state', { project_slug: currentProject, recent_lessons_limit: 50 });
+        const lessons = state.recent_lessons || [];
+
+        let html = '<div class="card">';
+        html += '<h2>Lessons <span class="count">' + lessons.length + '</span></h2>';
+        if (lessons.length === 0) {
+          html += '<div class="empty">No lessons yet.</div>';
+        } else {
+          lessons.forEach(l => {
+            html += '<div class="item">';
+            if (l.situation) {
+              html += '<div class="item-title">' + escapeHtml(l.situation) + '</div>';
+            }
+            html += '<div class="item-body">' + escapeHtml(l.lesson) + '</div>';
+            if (l.applies_to) {
+              html += '<div class="item-body" style="margin-top:4px;"><em>Applies to: ' + escapeHtml(l.applies_to) + '</em></div>';
+            }
+            html += '<div class="item-meta">';
+            const sevBadge = l.severity === 'major' ? 'badge-urgent' : l.severity === 'minor' ? 'badge-muted' : 'badge-normal';
+            html += '<span class="badge ' + sevBadge + '">' + escapeHtml(l.severity) + '</span>';
+            html += '<span>' + new Date(l.created_at).toLocaleDateString() + '</span>';
+            if (l.source) html += '<span>via ' + escapeHtml(l.source) + '</span>';
+            if (l.tags && l.tags.length) html += formatTags(l.tags);
+            html += '</div>';
+            html += '</div>';
+          });
+        }
+        html += '</div>';
+        el.innerHTML = html;
+      } catch (e) {
+        el.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // About tab — render the embedded doc
+    // ─────────────────────────────────────────────────────────
+    function renderAbout() {
+      const el = document.getElementById('about-content');
+      if (typeof marked === 'undefined') {
+        el.innerHTML = '<div class="loading">Loading markdown renderer...</div>';
+        setTimeout(renderAbout, 200);
+        return;
+      }
+      el.innerHTML = marked.parse(ABOUT_DOC);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Tab routing
+    // ─────────────────────────────────────────────────────────
+    let currentTab = 'overview';
+
+    async function loadCurrentTab() {
+      if (!currentProject && currentTab !== 'about') return;
+      clearError();
+      switch (currentTab) {
+        case 'overview': await renderOverview(); break;
+        case 'decisions': await renderDecisions(); break;
+        case 'plans': await renderPlans(); break;
+        case 'notes': await renderNotes(); break;
+        case 'lessons': await renderLessons(); break;
+        case 'about': renderAbout(); break;
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Event wiring
+    // ─────────────────────────────────────────────────────────
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        currentTab = btn.dataset.tab;
+        document.getElementById(currentTab + '-tab').classList.add('active');
+        loadCurrentTab();
+      });
+    });
+
+    document.getElementById('project-selector').addEventListener('change', (e) => {
+      currentProject = e.target.value;
+      localStorage.setItem('projectStateCurrentProject', currentProject);
+      loadCurrentTab();
+    });
+
+    document.getElementById('refresh-btn').addEventListener('click', () => {
+      loadCurrentTab();
+    });
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      if (confirm('Clear stored MCP token?')) {
+        clearToken();
+        localStorage.removeItem('projectStateCurrentProject');
+        location.reload();
+      }
+    });
+
+    document.getElementById('token-submit').addEventListener('click', () => {
+      const t = document.getElementById('token-input').value.trim();
+      if (!t) return;
+      setToken(t);
+      document.getElementById('token-prompt').style.display = 'none';
+      loadProjects();
+    });
+
+    document.getElementById('token-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('token-submit').click();
+    });
+
+    // ─────────────────────────────────────────────────────────
+    // Boot
+    // ─────────────────────────────────────────────────────────
+    if (!getToken()) {
+      promptForToken();
+    } else {
+      loadProjects();
+    }
+  </script>
+</body>
+</html>
