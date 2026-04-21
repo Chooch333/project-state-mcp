@@ -1746,13 +1746,18 @@ async function writeStatusSnapshot(supabase: SupabaseClient, args: Args): Promis
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.snapshot(args.narrative));
   const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
-  const { data, error } = await supabase.from('status_snapshots').insert({
+  // observed_at describes the moment the narrative captures; stored in created_at.
+  const observedAt = parseOverrideTimestamp(args.observed_at, 'observed_at');
+  const insertRow: any = {
     project_id: projectId,
     narrative: args.narrative,
     tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, narrative, tags, source, created_at').single();
+  };
+  if (observedAt) insertRow.created_at = observedAt;
+  const { data, error } = await supabase.from('status_snapshots').insert(insertRow)
+    .select('id, narrative, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
