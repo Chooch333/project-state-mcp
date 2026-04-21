@@ -337,13 +337,14 @@ export const TOOLS = [
   },
   {
     name: 'write_plan',
-    description: 'Store a build plan document.',
+    description: 'Store a build plan document. Always try to supply provenance — what you consulted to produce this plan.',
     inputSchema: {
       type: 'object',
       properties: {
         project_slug: { type: 'string' },
         title: { type: 'string' },
         content: { type: 'string' },
+        provenance: { type: 'string', description: 'Show your work. Strongly preferred.' },
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
       },
