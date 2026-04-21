@@ -1115,7 +1115,7 @@ async function resolveBlocker(supabase: SupabaseClient, args: Args): Promise<str
 async function addNextMove(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.nextMove(args.description));
-  const tags = normTags(args.tags);
+  const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
   const { data, error } = await supabase.from('next_moves').insert({
     project_id: projectId,
     description: args.description,
@@ -1126,7 +1126,7 @@ async function addNextMove(supabase: SupabaseClient, args: Args): Promise<string
     embedding: toPgVector(embedding),
   }).select('id, description, priority, estimated_effort, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify(data, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
 
 async function completeNextMove(supabase: SupabaseClient, args: Args): Promise<string> {
