@@ -1430,14 +1430,19 @@ async function addAssumption(supabase: SupabaseClient, args: Args): Promise<stri
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.assumption(args.statement, args.alternatives));
   const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
-  const { data, error } = await supabase.from('assumptions').insert({
+  // observed_at is the user-facing name (you observe assumptions, not "create" them); stored in created_at.
+  const observedAt = parseOverrideTimestamp(args.observed_at, 'observed_at');
+  const insertRow: any = {
     project_id: projectId,
     statement: args.statement,
     alternatives: args.alternatives ?? null,
     tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, statement, alternatives, status, tags, source, created_at').single();
+  };
+  if (observedAt) insertRow.created_at = observedAt;
+  const { data, error } = await supabase.from('assumptions').insert(insertRow)
+    .select('id, statement, alternatives, status, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
