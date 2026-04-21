@@ -189,7 +189,7 @@ export const TOOLS = [
   },
   {
     name: 'add_lesson',
-    description: 'Record a retrospective observation.',
+    description: 'Record a retrospective observation. Pass optional created_at to backdate when seeding from old chats.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -200,6 +200,7 @@ export const TOOLS = [
         severity: { type: 'string', enum: ['minor', 'normal', 'major'] },
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
+        created_at: { type: 'string', description: 'Optional ISO 8601 timestamp override. Defaults to now().' },
       },
       required: ['project_slug', 'situation', 'lesson', 'source'],
     },
