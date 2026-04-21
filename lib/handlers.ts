@@ -1194,7 +1194,7 @@ async function getPlan(supabase: SupabaseClient, args: Args): Promise<string> {
 async function writeStatusSnapshot(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.snapshot(args.narrative));
-  const tags = normTags(args.tags);
+  const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
   const { data, error } = await supabase.from('status_snapshots').insert({
     project_id: projectId,
     narrative: args.narrative,
@@ -1203,5 +1203,5 @@ async function writeStatusSnapshot(supabase: SupabaseClient, args: Args): Promis
     embedding: toPgVector(embedding),
   }).select('id, narrative, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify(data, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
