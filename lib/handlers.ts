@@ -790,20 +790,23 @@ async function listTags(supabase: SupabaseClient, args: Args): Promise<string> {
 async function addTagsToRow(supabase: SupabaseClient, args: Args): Promise<string> {
   const entityType: string = args.entity_type;
   const id: string = args.id;
-  const newTags = normTags(args.tags);
 
   const table = ENTITY_TABLE[entityType];
   if (!table) throw new Error(`Unknown entity_type: ${entityType}`);
-  if (newTags.length === 0) throw new Error('tags array must contain at least one non-empty tag');
 
-  const { data: row, error: fetchErr } = await supabase.from(table).select('tags').eq('id', id).maybeSingle();
+  // Fetch existing row for project scope and current tags
+  const { data: row, error: fetchErr } = await supabase.from(table).select('tags, project_id').eq('id', id).maybeSingle();
   if (fetchErr) throw new Error(fetchErr.message);
   if (!row) throw new Error(`${entityType} not found: ${id}`);
 
-  const merged = Array.from(new Set([...(row.tags ?? []), ...newTags]));
+  // Reconcile the new tags against existing tags in the same project scope
+  const { tags: reconciled, substitutions } = await normalizeAndReconcile(supabase, args.tags, row.project_id);
+  if (reconciled.length === 0) throw new Error('tags array must contain at least one non-empty tag after normalization');
+
+  const merged = Array.from(new Set([...(row.tags ?? []), ...reconciled]));
   const { data, error } = await supabase.from(table).update({ tags: merged }).eq('id', id).select('id, tags').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify(data, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
