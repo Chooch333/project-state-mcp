@@ -337,7 +337,7 @@ export const TOOLS = [
   },
   {
     name: 'add_next_move',
-    description: 'Add a concrete next action.',
+    description: 'Add a concrete next action. Pass optional created_at to backdate.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -347,6 +347,7 @@ export const TOOLS = [
         estimated_effort: { type: 'string', enum: ['small', 'medium', 'large'] },
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
+        created_at: { type: 'string', description: 'Optional ISO 8601 timestamp override. Defaults to now().' },
       },
       required: ['project_slug', 'description', 'source'],
     },
