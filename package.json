@@ -1,0 +1,16 @@
+{
+  "name": "project-state-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Charles's project state — durable memory of decisions, assumptions, blockers, next moves, and plans across projects.",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}
