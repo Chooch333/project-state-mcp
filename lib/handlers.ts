@@ -992,6 +992,7 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
     promoted_from_note: note_id,
     promoted_to_entity: target_entity,
     new_row: newRow,
+    tag_substitutions: substitutions,
   }, null, 2);
 }
 
