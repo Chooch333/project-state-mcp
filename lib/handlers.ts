@@ -4,6 +4,27 @@ import { embed, toPgVector, composeEmbeddingText } from './embeddings';
 
 type Args = Record<string, any>;
 
+// Normalize incoming tags: coerce undefined/null to [], strip empty strings, deduplicate, lowercase for consistency.
+function normTags(tags: any): string[] {
+  if (!Array.isArray(tags)) return [];
+  const cleaned = tags
+    .filter((t) => typeof t === 'string' && t.trim().length > 0)
+    .map((t) => t.trim().toLowerCase());
+  return Array.from(new Set(cleaned));
+}
+
+// Table names per entity type (single source of truth)
+const ENTITY_TABLE: Record<string, string> = {
+  decision: 'decisions',
+  assumption: 'assumptions',
+  blocker: 'blockers',
+  next_move: 'next_moves',
+  plan: 'plans',
+  snapshot: 'status_snapshots',
+  note: 'notes',
+  lesson: 'lessons',
+};
+
 export async function callTool(name: string, args: Args): Promise<string> {
   const supabase = getSupabase();
 
@@ -14,6 +35,12 @@ export async function callTool(name: string, args: Args): Promise<string> {
       return getProjectState(supabase, args);
     case 'search_state':
       return searchState(supabase, args);
+    case 'find_by_tags':
+      return findByTags(supabase, args);
+    case 'list_tags':
+      return listTags(supabase, args);
+    case 'add_tags':
+      return addTagsToRow(supabase, args);
     case 'create_project':
       return createProject(supabase, args);
     case 'add_note':
@@ -70,13 +97,13 @@ async function getProjectState(supabase: SupabaseClient, args: Args): Promise<st
   const lessonsLimit = args.recent_lessons_limit ?? 10;
 
   const [decisions, assumptions, blockers, nextMoves, snapshot, notes, lessons, project] = await Promise.all([
-    supabase.from('decisions').select('id, title, rationale, alternatives_considered, decided_at, source').eq('project_id', projectId).is('supersedes', null).order('decided_at', { ascending: false }),
-    supabase.from('assumptions').select('id, statement, alternatives, source, created_at').eq('project_id', projectId).eq('status', 'active').order('created_at', { ascending: false }),
-    supabase.from('blockers').select('id, question, context, source, created_at').eq('project_id', projectId).is('resolved_at', null).order('created_at', { ascending: false }),
-    supabase.from('next_moves').select('id, description, priority, estimated_effort, source, created_at').eq('project_id', projectId).is('completed_at', null).order('created_at', { ascending: false }),
-    supabase.from('status_snapshots').select('narrative, source, created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('notes').select('id, content, topic, source, created_at, promoted_to_entity, promoted_to_id').eq('project_id', projectId).order('created_at', { ascending: false }).limit(notesLimit),
-    supabase.from('lessons').select('id, situation, lesson, applies_to, severity, source, created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(lessonsLimit),
+    supabase.from('decisions').select('id, title, rationale, alternatives_considered, tags, decided_at, source').eq('project_id', projectId).is('supersedes', null).order('decided_at', { ascending: false }),
+    supabase.from('assumptions').select('id, statement, alternatives, tags, source, created_at').eq('project_id', projectId).eq('status', 'active').order('created_at', { ascending: false }),
+    supabase.from('blockers').select('id, question, context, tags, source, created_at').eq('project_id', projectId).is('resolved_at', null).order('created_at', { ascending: false }),
+    supabase.from('next_moves').select('id, description, priority, estimated_effort, tags, source, created_at').eq('project_id', projectId).is('completed_at', null).order('created_at', { ascending: false }),
+    supabase.from('status_snapshots').select('narrative, tags, source, created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('notes').select('id, content, topic, tags, source, created_at, promoted_to_entity, promoted_to_id').eq('project_id', projectId).order('created_at', { ascending: false }).limit(notesLimit),
+    supabase.from('lessons').select('id, situation, lesson, applies_to, severity, tags, source, created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(lessonsLimit),
     supabase.from('projects').select('name, description, repo_url, supabase_project_id, vercel_project_id').eq('id', projectId).maybeSingle(),
   ]);
 
@@ -114,40 +141,28 @@ async function searchState(supabase: SupabaseClient, args: Args): Promise<string
 
   const limit = Math.max(1, Math.min(args.limit ?? 10, 50));
   const entityTypes: string[] | undefined = args.entity_types;
-  let projectFilter = '';
-  const params: any[] = [];
 
   const queryEmbedding = await embed(query);
   const hasEmbedding = queryEmbedding !== null;
 
-  // Resolve project if given
   let projectId: string | null = null;
   if (args.project_slug) {
     projectId = await resolveProjectId(supabase, args.project_slug);
   }
 
-  // Build a UNION across entity tables. If embeddings are unavailable, fall back to trigram similarity.
-  // Using supabase.rpc would be cleaner but requires a pg function; use raw SQL via a helper table instead.
-  // The approach: query each table separately, score each result, merge and sort in JS. Simpler, flexible.
-
   const allowed = (t: string) => !entityTypes || entityTypes.includes(t);
   const results: any[] = [];
 
-  // Helper to run a search for one entity type
   const runSearch = async (
     entityType: string,
     table: string,
-    contentExpr: string,
     selectFields: string,
     orderField: string
   ) => {
     if (!allowed(entityType)) return;
 
-    let q = supabase.from(table).select(`${selectFields}, embedding, created_at`);
+    let q = supabase.from(table).select(`${selectFields}, embedding, tags, created_at`);
     if (projectId) q = q.eq('project_id', projectId);
-
-    // For blockers and next_moves, prefer open items but include all (signals can come from resolved too)
-    // No status filter by default — search everything within the table.
 
     const { data, error } = await q.order(orderField, { ascending: false }).limit(200);
     if (error) throw new Error(`${entityType} search: ${error.message}`);
@@ -158,13 +173,11 @@ async function searchState(supabase: SupabaseClient, args: Args): Promise<string
       if (hasEmbedding && row.embedding) {
         score = cosineSimilarity(queryEmbedding!, parseEmbedding(row.embedding));
       } else {
-        // keyword fallback: crude trigram-like scoring via includes()
         const content = extractContent(entityType, row);
-        const q = query.toLowerCase();
-        score = content.toLowerCase().includes(q) ? 0.5 : 0.0;
+        const lowerQ = query.toLowerCase();
+        score = content.toLowerCase().includes(lowerQ) ? 0.5 : 0.0;
       }
       if (score > 0.3) {
-        // Strip embedding from output
         const { embedding, ...rest } = row;
         results.push({
           entity_type: entityType,
@@ -176,14 +189,14 @@ async function searchState(supabase: SupabaseClient, args: Args): Promise<string
   };
 
   await Promise.all([
-    runSearch('decision', 'decisions', 'title', 'id, title, rationale, alternatives_considered, source, decided_at', 'decided_at'),
-    runSearch('assumption', 'assumptions', 'statement', 'id, statement, alternatives, status, source', 'created_at'),
-    runSearch('blocker', 'blockers', 'question', 'id, question, context, answer, resolved_at, source', 'created_at'),
-    runSearch('next_move', 'next_moves', 'description', 'id, description, priority, estimated_effort, completed_at, source', 'created_at'),
-    runSearch('plan', 'plans', 'title', 'id, title, status, source', 'created_at'),
-    runSearch('snapshot', 'status_snapshots', 'narrative', 'id, narrative, source', 'created_at'),
-    runSearch('note', 'notes', 'content', 'id, content, topic, promoted_to_entity, promoted_to_id, source', 'created_at'),
-    runSearch('lesson', 'lessons', 'situation', 'id, situation, lesson, applies_to, severity, source', 'created_at'),
+    runSearch('decision', 'decisions', 'id, title, rationale, alternatives_considered, source, decided_at', 'decided_at'),
+    runSearch('assumption', 'assumptions', 'id, statement, alternatives, status, source', 'created_at'),
+    runSearch('blocker', 'blockers', 'id, question, context, answer, resolved_at, source', 'created_at'),
+    runSearch('next_move', 'next_moves', 'id, description, priority, estimated_effort, completed_at, source', 'created_at'),
+    runSearch('plan', 'plans', 'id, title, status, source', 'created_at'),
+    runSearch('snapshot', 'status_snapshots', 'id, narrative, source', 'created_at'),
+    runSearch('note', 'notes', 'id, content, topic, promoted_to_entity, promoted_to_id, source', 'created_at'),
+    runSearch('lesson', 'lessons', 'id, situation, lesson, applies_to, severity, source', 'created_at'),
   ]);
 
   results.sort((a, b) => b.similarity - a.similarity);
@@ -195,6 +208,125 @@ async function searchState(supabase: SupabaseClient, args: Args): Promise<string
     result_count: top.length,
     results: top,
   }, null, 2);
+}
+
+// ─────────────────────────────────────────────────────────
+// Tag-based retrieval
+// ─────────────────────────────────────────────────────────
+
+async function findByTags(supabase: SupabaseClient, args: Args): Promise<string> {
+  const inputTags = normTags(args.tags);
+  if (inputTags.length === 0) throw new Error('tags array must contain at least one non-empty tag');
+
+  const matchMode = args.match_mode === 'all' ? 'all' : 'any';
+  const entityTypes: string[] | undefined = args.entity_types;
+  const limit = Math.max(1, Math.min(args.limit ?? 50, 200));
+
+  let projectId: string | null = null;
+  if (args.project_slug) {
+    projectId = await resolveProjectId(supabase, args.project_slug);
+  }
+
+  const allowed = (t: string) => !entityTypes || entityTypes.includes(t);
+  const results: any[] = [];
+
+  const runTagQuery = async (
+    entityType: string,
+    table: string,
+    selectFields: string,
+    orderField: string
+  ) => {
+    if (!allowed(entityType)) return;
+
+    let q = supabase.from(table).select(`${selectFields}, tags, created_at`);
+    if (projectId) q = q.eq('project_id', projectId);
+    // Postgres array operators via Supabase:
+    //   @> (contains) for match_mode=all  — row.tags contains ALL inputTags
+    //   && (overlaps) for match_mode=any  — row.tags overlaps with inputTags
+    if (matchMode === 'all') {
+      q = q.contains('tags', inputTags);
+    } else {
+      q = q.overlaps('tags', inputTags);
+    }
+
+    const { data, error } = await q.order(orderField, { ascending: false }).limit(limit);
+    if (error) throw new Error(`${entityType} find_by_tags: ${error.message}`);
+    if (!data) return;
+
+    for (const row of data) {
+      results.push({ entity_type: entityType, ...row });
+    }
+  };
+
+  await Promise.all([
+    runTagQuery('decision', 'decisions', 'id, title, rationale, alternatives_considered, source, decided_at', 'decided_at'),
+    runTagQuery('assumption', 'assumptions', 'id, statement, alternatives, status, source', 'created_at'),
+    runTagQuery('blocker', 'blockers', 'id, question, context, answer, resolved_at, source', 'created_at'),
+    runTagQuery('next_move', 'next_moves', 'id, description, priority, estimated_effort, completed_at, source', 'created_at'),
+    runTagQuery('plan', 'plans', 'id, title, status, source', 'created_at'),
+    runTagQuery('snapshot', 'status_snapshots', 'id, narrative, source', 'created_at'),
+    runTagQuery('note', 'notes', 'id, content, topic, promoted_to_entity, promoted_to_id, source', 'created_at'),
+    runTagQuery('lesson', 'lessons', 'id, situation, lesson, applies_to, severity, source', 'created_at'),
+  ]);
+
+  return JSON.stringify({
+    match_mode: matchMode,
+    tags: inputTags,
+    result_count: results.length,
+    results,
+  }, null, 2);
+}
+
+async function listTags(supabase: SupabaseClient, args: Args): Promise<string> {
+  let projectId: string | null = null;
+  if (args.project_slug) {
+    projectId = await resolveProjectId(supabase, args.project_slug);
+  }
+
+  // For each entity table, pull tags arrays and aggregate.
+  const tables = Object.values(ENTITY_TABLE);
+  const tagCounts = new Map<string, number>();
+
+  for (const table of tables) {
+    let q = supabase.from(table).select('tags');
+    if (projectId) q = q.eq('project_id', projectId);
+    const { data, error } = await q;
+    if (error) throw new Error(`${table} list_tags: ${error.message}`);
+    if (!data) continue;
+
+    for (const row of data) {
+      const rowTags: string[] = row.tags ?? [];
+      for (const tag of rowTags) {
+        tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+      }
+    }
+  }
+
+  const sorted = Array.from(tagCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([tag, count]) => ({ tag, count }));
+
+  return JSON.stringify({ project_slug: args.project_slug ?? 'all', tag_count: sorted.length, tags: sorted }, null, 2);
+}
+
+async function addTagsToRow(supabase: SupabaseClient, args: Args): Promise<string> {
+  const entityType: string = args.entity_type;
+  const id: string = args.id;
+  const newTags = normTags(args.tags);
+
+  const table = ENTITY_TABLE[entityType];
+  if (!table) throw new Error(`Unknown entity_type: ${entityType}`);
+  if (newTags.length === 0) throw new Error('tags array must contain at least one non-empty tag');
+
+  // Fetch existing tags, merge, dedupe, update
+  const { data: row, error: fetchErr } = await supabase.from(table).select('tags').eq('id', id).maybeSingle();
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (!row) throw new Error(`${entityType} not found: ${id}`);
+
+  const merged = Array.from(new Set([...(row.tags ?? []), ...newTags]));
+  const { data, error } = await supabase.from(table).update({ tags: merged }).eq('id', id).select('id, tags').single();
+  if (error) throw new Error(error.message);
+  return JSON.stringify(data, null, 2);
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -213,7 +345,6 @@ function parseEmbedding(raw: any): number[] {
   if (Array.isArray(raw)) return raw;
   if (typeof raw === 'string') {
     try {
-      // pgvector returns "[n,n,n]" string format
       const clean = raw.trim().replace(/^\[|\]$/g, '');
       return clean.split(',').map(Number).filter(n => !isNaN(n));
     } catch {
@@ -261,13 +392,15 @@ async function createProject(supabase: SupabaseClient, args: Args): Promise<stri
 async function addNote(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.note(args.content, args.topic));
+  const tags = normTags(args.tags);
   const { data, error } = await supabase.from('notes').insert({
     project_id: projectId,
     content: args.content,
     topic: args.topic ?? null,
+    tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, content, topic, source, created_at').single();
+  }).select('id, content, topic, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify(data, null, 2);
 }
@@ -275,13 +408,19 @@ async function addNote(supabase: SupabaseClient, args: Args): Promise<string> {
 async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string> {
   const { note_id, target_entity, source } = args;
 
-  // Fetch the note
-  const { data: note, error: noteErr } = await supabase.from('notes').select('project_id, promoted_to_entity, promoted_to_id').eq('id', note_id).maybeSingle();
+  // Fetch the note (including tags and topic for carryover)
+  const { data: note, error: noteErr } = await supabase.from('notes').select('project_id, tags, topic, promoted_to_entity, promoted_to_id').eq('id', note_id).maybeSingle();
   if (noteErr) throw new Error(noteErr.message);
   if (!note) throw new Error(`Note not found: ${note_id}`);
   if (note.promoted_to_entity) throw new Error(`Note already promoted to ${note.promoted_to_entity}:${note.promoted_to_id}`);
 
   const projectId = note.project_id;
+  // Default: carry over note's tags (including topic as tag if present) unless caller supplied tags
+  const incoming = normTags(args.tags);
+  const carryoverTags = note.tags ?? [];
+  const topicAsTag = note.topic ? [note.topic.toLowerCase()] : [];
+  const tags = incoming.length > 0 ? incoming : Array.from(new Set([...carryoverTags, ...topicAsTag]));
+
   let newRow: any;
 
   if (target_entity === 'decision') {
@@ -292,6 +431,7 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
       title: args.title,
       rationale: args.rationale,
       alternatives_considered: args.alternatives_considered ?? null,
+      tags,
       source,
       embedding: toPgVector(emb),
     }).select().single();
@@ -304,6 +444,7 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
       project_id: projectId,
       statement: args.statement,
       alternatives: args.alternatives ?? null,
+      tags,
       source,
       embedding: toPgVector(emb),
     }).select().single();
@@ -316,6 +457,7 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
       project_id: projectId,
       question: args.question,
       context: args.context ?? null,
+      tags,
       source,
       embedding: toPgVector(emb),
     }).select().single();
@@ -329,6 +471,7 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
       description: args.description,
       priority: args.priority ?? 'normal',
       estimated_effort: args.estimated_effort ?? null,
+      tags,
       source,
       embedding: toPgVector(emb),
     }).select().single();
@@ -343,6 +486,7 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
       lesson: args.lesson,
       applies_to: args.applies_to ?? null,
       severity: args.severity ?? 'normal',
+      tags,
       source,
       embedding: toPgVector(emb),
     }).select().single();
@@ -352,7 +496,6 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
     throw new Error(`Invalid target_entity: ${target_entity}`);
   }
 
-  // Link the note to the new row
   const { error: updateErr } = await supabase.from('notes').update({
     promoted_to_entity: target_entity,
     promoted_to_id: newRow.id,
@@ -373,15 +516,17 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
 async function addLesson(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.lesson(args.situation, args.lesson, args.applies_to));
+  const tags = normTags(args.tags);
   const { data, error } = await supabase.from('lessons').insert({
     project_id: projectId,
     situation: args.situation,
     lesson: args.lesson,
     applies_to: args.applies_to ?? null,
     severity: args.severity ?? 'normal',
+    tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, situation, lesson, applies_to, severity, source, created_at').single();
+  }).select('id, situation, lesson, applies_to, severity, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify(data, null, 2);
 }
@@ -393,33 +538,38 @@ async function addLesson(supabase: SupabaseClient, args: Args): Promise<string> 
 async function logDecision(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.decision(args.title, args.rationale, args.alternatives_considered));
+  const tags = normTags(args.tags);
   const { data, error } = await supabase.from('decisions').insert({
     project_id: projectId,
     title: args.title,
     rationale: args.rationale,
     alternatives_considered: args.alternatives_considered ?? null,
+    tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, title, rationale, alternatives_considered, source, decided_at').single();
+  }).select('id, title, rationale, alternatives_considered, tags, source, decided_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify(data, null, 2);
 }
 
 async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<string> {
-  const { data: oldRow, error: oldErr } = await supabase.from('decisions').select('project_id').eq('id', args.old_decision_id).maybeSingle();
+  const { data: oldRow, error: oldErr } = await supabase.from('decisions').select('project_id, tags').eq('id', args.old_decision_id).maybeSingle();
   if (oldErr) throw new Error(oldErr.message);
   if (!oldRow) throw new Error(`Decision not found: ${args.old_decision_id}`);
 
   const embedding = await embed(composeEmbeddingText.decision(args.new_title, args.new_rationale, args.new_alternatives_considered));
+  const incoming = normTags(args.tags);
+  const tags = incoming.length > 0 ? incoming : (oldRow.tags ?? []);
   const { data, error } = await supabase.from('decisions').insert({
     project_id: oldRow.project_id,
     title: args.new_title,
     rationale: args.new_rationale,
     alternatives_considered: args.new_alternatives_considered ?? null,
+    tags,
     source: args.source,
     supersedes: args.old_decision_id,
     embedding: toPgVector(embedding),
-  }).select('id, title, rationale, source, supersedes, decided_at').single();
+  }).select('id, title, rationale, tags, source, supersedes, decided_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify(data, null, 2);
 }
@@ -431,13 +581,15 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
 async function addAssumption(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.assumption(args.statement, args.alternatives));
+  const tags = normTags(args.tags);
   const { data, error } = await supabase.from('assumptions').insert({
     project_id: projectId,
     statement: args.statement,
     alternatives: args.alternatives ?? null,
+    tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, statement, alternatives, status, source, created_at').single();
+  }).select('id, statement, alternatives, status, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify(data, null, 2);
 }
@@ -459,13 +611,15 @@ async function updateAssumption(supabase: SupabaseClient, args: Args): Promise<s
 async function addBlocker(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.blocker(args.question, args.context));
+  const tags = normTags(args.tags);
   const { data, error } = await supabase.from('blockers').insert({
     project_id: projectId,
     question: args.question,
     context: args.context ?? null,
+    tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, question, context, source, created_at').single();
+  }).select('id, question, context, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify(data, null, 2);
 }
@@ -486,14 +640,16 @@ async function resolveBlocker(supabase: SupabaseClient, args: Args): Promise<str
 async function addNextMove(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.nextMove(args.description));
+  const tags = normTags(args.tags);
   const { data, error } = await supabase.from('next_moves').insert({
     project_id: projectId,
     description: args.description,
     priority: args.priority ?? 'normal',
     estimated_effort: args.estimated_effort ?? null,
+    tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, description, priority, estimated_effort, source, created_at').single();
+  }).select('id, description, priority, estimated_effort, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify(data, null, 2);
 }
@@ -513,13 +669,15 @@ async function completeNextMove(supabase: SupabaseClient, args: Args): Promise<s
 async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.plan(args.title, args.content));
+  const tags = normTags(args.tags);
   const { data, error } = await supabase.from('plans').insert({
     project_id: projectId,
     title: args.title,
     content: args.content,
+    tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, title, status, source, created_at').single();
+  }).select('id, title, status, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify(data, null, 2);
 }
@@ -561,12 +719,14 @@ async function getPlan(supabase: SupabaseClient, args: Args): Promise<string> {
 async function writeStatusSnapshot(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.snapshot(args.narrative));
+  const tags = normTags(args.tags);
   const { data, error } = await supabase.from('status_snapshots').insert({
     project_id: projectId,
     narrative: args.narrative,
+    tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, narrative, source, created_at').single();
+  }).select('id, narrative, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify(data, null, 2);
 }
