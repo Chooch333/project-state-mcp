@@ -1693,3 +1693,82 @@ async function writeStatusSnapshot(supabase: SupabaseClient, args: Args): Promis
   if (error) throw new Error(error.message);
   return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
+
+// ─────────────────────────────────────────────────────────
+// describe_capabilities — self-introspection.
+// When a fresh Claude encounters this MCP, one call to this tool
+// replaces reading 30+ tool descriptions. It returns:
+//   - What the system is for
+//   - What entities it tracks (and how they relate)
+//   - Standing principles (soft requirements, no fabrication, explicit scope)
+//   - Tool categories (dashboard/activity/search/write/update)
+//   - Currently-registered projects (dynamic)
+//   - Tips for using it well
+// ─────────────────────────────────────────────────────────
+
+async function describeCapabilities(supabase: SupabaseClient, _args: Args): Promise<string> {
+  // Pull current projects so the response is self-documenting
+  const { data: projects } = await supabase
+    .from('projects')
+    .select('slug, name, description, status')
+    .neq('status', 'archived')
+    .order('name');
+
+  const overview =
+    'A cross-chat memory system. Every project you work on has state — decisions made, ' +
+    'assumptions active, blockers open, next moves queued, plans in flight, lessons learned, ' +
+    'snapshots of where things stand. This system persists that state in a shared database so ' +
+    'a conversation picked up a week later starts where the last one ended. It is accessed ' +
+    'through an MCP server that runs alongside every Claude chat.';
+
+  const entities = {
+    project: 'The top-level container. Everything else belongs to a project. Each project has a slug (e.g. family-trip-app) and optional repo URL / Supabase ID / Vercel ID.',
+    decision: 'A closed commitment that shapes what gets built. Immutable once written — to change, supersede it. Carries rationale, optional change_reason (why we moved from the old decision), and optional provenance (what you consulted).',
+    assumption: 'Something believed to be true without verification. Status: active / confirmed / invalidated. Transitions through update_assumption.',
+    blocker: 'An open question or external dependency stopping progress. Resolves when someone answers or the dependency lifts.',
+    next_move: 'A concrete action. Has priority (urgent/normal/someday) and estimated_effort (small/medium/large). Completes when done.',
+    plan: 'A structured document describing how something will be built. Goes through lifecycle: draft → blessed → executing → complete (or abandoned). Content is versioned — every edit creates a new entry in plan_revisions.',
+    note: 'Low-friction capture. Use for anything worth remembering that does not yet fit a structured entity. Can later be promoted into a decision / assumption / blocker / next_move / lesson.',
+    lesson: 'A retrospective observation. What happened, what to do differently. Carries severity (minor/normal/major).',
+    snapshot: 'A narrative summary of where a project is right now. Written periodically to capture the feel of the moment, not just the structured state.',
+  };
+
+  const standing_principles = [
+    'System carries discipline, not user. Server normalizes tags, reconciles near-duplicates, regenerates embeddings, defaults to safe behavior. You tag and write however is natural.',
+    'Silent-work, visible-narration pattern. Server does the work; response includes fields describing what was done (tag_substitutions, warnings, project_counts). Claude relays to the user conversationally.',
+    'Never fabricate defaults. If change_reason or provenance is unknown, store null and return a warning. A null field is more honest than a meaningless placeholder. Ask the user rather than inventing.',
+    'Explicit opt-in for cross-project. Any read that could span projects (search_state, find_by_tags, get_activity) requires either project_slug or all_projects=true. Omitting both is an error.',
+    'Soft-requirement pattern: fields like change_reason and provenance are strongly preferred but not strictly required. Missing surfaces a warning with the ID needed to fill it in later — never blocks the write.',
+    'Results carry project_slug. Every cross-project result row includes which project it came from. Responses include project_counts so the caller sees the breakdown at a glance.',
+  ];
+
+  const tool_categories = {
+    overview: 'Use get_project_dashboard for "how is X going" queries (fast, fixed-shape). Use get_project_state for full dumps. Use get_activity for "what happened" timelines.',
+    search: 'search_state for semantic search ("find things about X"). find_by_tags for exact/fuzzy tag retrieval. list_tags to see what tags exist. Both require scope (project_slug or all_projects).',
+    write_capture: 'add_note for low-friction capture. promote_note to convert a note into a structured entity. log_decision, add_assumption, add_blocker, add_next_move, add_lesson, write_plan, write_status_snapshot for direct structured writes.',
+    update_lifecycle: 'update_assumption (status change), resolve_blocker, complete_next_move, update_plan_status, update_plan_content (creates revision), supersede_decision (replaces an old decision).',
+    update_fill_gaps: 'update_change_reason fills in a missing reason on a supersession. update_provenance fills in missing provenance on a decision or plan. add_tags appends tags.',
+    history_walkers: 'get_decision_chain walks supersession history for a decision. get_plan_revisions walks a plan\'s edit history. Both show how thinking evolved.',
+    project_registration: 'create_project to register a new project. list_projects to see what exists.',
+  };
+
+  const usage_tips = [
+    'When the user asks "what are we doing on X", call get_project_dashboard first. It is cheap, fast, and fixed-shape. Only call get_project_state when they explicitly want the full dump.',
+    'When you are not sure whether something is a decision, assumption, or note — write a note. Promotion is easy. Reclassification after writing the wrong entity is costly.',
+    'Always pass source. It names who made this write (e.g. "claude-chat-2026-04-21-trip-app"). Future readers will want to know where the entry came from.',
+    'Tag liberally. The server reconciles near-duplicates automatically ("Photos" → "photo", "Build Manager" → "build-manager"), so you never need to be consistent by hand. Tags make future retrieval cheap.',
+    'Warnings in responses are for the user, not just for you. If the server warns that change_reason is missing, ask the user — do not guess.',
+    'For cross-project work, always pass all_projects=true explicitly. The error message you get otherwise is designed to remind you to be intentional about scope.',
+  ];
+
+  return JSON.stringify({
+    name: 'Project State MCP',
+    version: 'live',
+    overview,
+    entities,
+    standing_principles,
+    tool_categories,
+    usage_tips,
+    projects_registered: projects ?? [],
+  }, null, 2);
+}
