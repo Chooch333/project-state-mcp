@@ -1140,7 +1140,9 @@ async function logDecision(supabase: SupabaseClient, args: Args): Promise<string
     ? args.provenance.trim()
     : null;
 
-  const { data, error } = await supabase.from('decisions').insert({
+  const decidedAt = parseOverrideTimestamp(args.decided_at, 'decided_at');
+
+  const insertRow: any = {
     project_id: projectId,
     title: args.title,
     rationale: args.rationale,
@@ -1149,7 +1151,11 @@ async function logDecision(supabase: SupabaseClient, args: Args): Promise<string
     tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, title, rationale, alternatives_considered, provenance, tags, source, decided_at').single();
+  };
+  if (decidedAt) insertRow.decided_at = decidedAt;
+
+  const { data, error } = await supabase.from('decisions').insert(insertRow)
+    .select('id, title, rationale, alternatives_considered, provenance, tags, source, decided_at').single();
   if (error) throw new Error(error.message);
 
   const response: any = { ...data, tag_substitutions: substitutions };
