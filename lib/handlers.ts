@@ -991,7 +991,7 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
 async function addLesson(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.lesson(args.situation, args.lesson, args.applies_to));
-  const tags = normTags(args.tags);
+  const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
   const { data, error } = await supabase.from('lessons').insert({
     project_id: projectId,
     situation: args.situation,
@@ -1003,7 +1003,7 @@ async function addLesson(supabase: SupabaseClient, args: Args): Promise<string> 
     embedding: toPgVector(embedding),
   }).select('id, situation, lesson, applies_to, severity, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify(data, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
 
 // ─────────────────────────────────────────────────────────
