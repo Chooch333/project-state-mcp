@@ -89,6 +89,8 @@ export async function callTool(name: string, args: Args): Promise<string> {
       return getPlan(supabase, args);
     case 'write_status_snapshot':
       return writeStatusSnapshot(supabase, args);
+    case 'describe_capabilities':
+      return describeCapabilities(supabase, args);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
