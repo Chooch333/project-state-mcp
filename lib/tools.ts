@@ -309,7 +309,7 @@ export const TOOLS = [
   },
   {
     name: 'add_blocker',
-    description: 'Log an open question or external dependency blocking progress.',
+    description: 'Log an open question or external dependency blocking progress. Pass optional raised_at to backdate.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -318,6 +318,7 @@ export const TOOLS = [
         context: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
+        raised_at: { type: 'string', description: 'Optional ISO 8601 timestamp override — when the blocker was first raised. Defaults to now().' },
       },
       required: ['project_slug', 'question', 'source'],
     },
