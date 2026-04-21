@@ -1111,6 +1111,50 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
 }
 
 // ─────────────────────────────────────────────────────────
+// Update the change_reason on a supersession.
+// Use when change_reason was skipped at write time, or when a better
+// articulation emerges later. Requires that the decision has a supersedes
+// pointer (original decisions have no predecessor to explain).
+// ─────────────────────────────────────────────────────────
+
+async function updateChangeReason(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (!args.decision_id) throw new Error('decision_id is required');
+  if (typeof args.change_reason !== 'string' || args.change_reason.trim().length === 0) {
+    throw new Error('change_reason must be a non-empty string');
+  }
+
+  // Verify this decision supersedes another (otherwise change_reason has nothing to explain)
+  const { data: row, error: fetchErr } = await supabase
+    .from('decisions')
+    .select('id, title, supersedes, change_reason')
+    .eq('id', args.decision_id)
+    .maybeSingle();
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (!row) throw new Error(`Decision not found: ${args.decision_id}`);
+  if (!row.supersedes) {
+    throw new Error(
+      `Decision ${args.decision_id} is an original (does not supersede another). ` +
+      'change_reason explains the transition FROM a previous decision — original decisions have no transition to explain.'
+    );
+  }
+
+  const previousValue = row.change_reason;
+  const { data, error } = await supabase
+    .from('decisions')
+    .update({ change_reason: args.change_reason.trim() })
+    .eq('id', args.decision_id)
+    .select('id, title, supersedes, change_reason')
+    .single();
+  if (error) throw new Error(error.message);
+
+  return JSON.stringify({
+    ...data,
+    previous_value: previousValue,
+    updated: true,
+  }, null, 2);
+}
+
+// ─────────────────────────────────────────────────────────
 // Decision chain walker
 // Given any decision ID, returns the full supersession history:
 // ancestors (via backward walk of `supersedes` pointers) + descendants
