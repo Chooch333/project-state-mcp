@@ -1196,7 +1196,9 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
     tags = oldRow.tags ?? [];
   }
 
-  const { data, error } = await supabase.from('decisions').insert({
+  const decidedAt = parseOverrideTimestamp(args.decided_at, 'decided_at');
+
+  const insertRow: any = {
     project_id: oldRow.project_id,
     title: args.new_title,
     rationale: args.new_rationale,
@@ -1207,7 +1209,11 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
     source: args.source,
     supersedes: args.old_decision_id,
     embedding: toPgVector(embedding),
-  }).select('id, title, rationale, change_reason, provenance, tags, source, supersedes, decided_at').single();
+  };
+  if (decidedAt) insertRow.decided_at = decidedAt;
+
+  const { data, error } = await supabase.from('decisions').insert(insertRow)
+    .select('id, title, rationale, change_reason, provenance, tags, source, supersedes, decided_at').single();
   if (error) throw new Error(error.message);
 
   const response: any = { ...data, tag_substitutions: substitutions };
