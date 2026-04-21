@@ -1036,8 +1036,18 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
   if (!oldRow) throw new Error(`Decision not found: ${args.old_decision_id}`);
 
   const embedding = await embed(composeEmbeddingText.decision(args.new_title, args.new_rationale, args.new_alternatives_considered));
-  const incoming = normTags(args.tags);
-  const tags = incoming.length > 0 ? incoming : (oldRow.tags ?? []);
+
+  // If caller passed tags, reconcile them. Otherwise keep the old decision's tags as-is.
+  let tags: string[];
+  let substitutions: Array<{ from: string; to: string; score: number }> = [];
+  if (args.tags && Array.isArray(args.tags) && args.tags.length > 0) {
+    const result = await normalizeAndReconcile(supabase, args.tags, oldRow.project_id);
+    tags = result.tags;
+    substitutions = result.substitutions;
+  } else {
+    tags = oldRow.tags ?? [];
+  }
+
   const { data, error } = await supabase.from('decisions').insert({
     project_id: oldRow.project_id,
     title: args.new_title,
@@ -1049,7 +1059,7 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
     embedding: toPgVector(embedding),
   }).select('id, title, rationale, tags, source, supersedes, decided_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify(data, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
 
 // ─────────────────────────────────────────────────────────
