@@ -1078,12 +1078,13 @@ async function logDecision(supabase: SupabaseClient, args: Args): Promise<string
 
 async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<string> {
   // change_reason is strongly preferred but not strictly required.
-  // If missing, we store null and return a warning — the supersession still succeeds.
-  // This prevents a mid-flow block when Claude can't yet articulate the reason,
-  // while keeping missing reasons explicitly visible (as null) rather than disguised
-  // as a meaningless default string.
   const providedReason = (typeof args.change_reason === 'string' && args.change_reason.trim().length > 0)
     ? args.change_reason.trim()
+    : null;
+
+  // provenance follows the same pattern: optional, null-default, warning if missing.
+  const provenance = (typeof args.provenance === 'string' && args.provenance.trim().length > 0)
+    ? args.provenance.trim()
     : null;
 
   const { data: oldRow, error: oldErr } = await supabase.from('decisions').select('project_id, tags').eq('id', args.old_decision_id).maybeSingle();
@@ -1109,19 +1110,29 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
     rationale: args.new_rationale,
     alternatives_considered: args.new_alternatives_considered ?? null,
     change_reason: providedReason,
+    provenance,
     tags,
     source: args.source,
     supersedes: args.old_decision_id,
     embedding: toPgVector(embedding),
-  }).select('id, title, rationale, change_reason, tags, source, supersedes, decided_at').single();
+  }).select('id, title, rationale, change_reason, provenance, tags, source, supersedes, decided_at').single();
   if (error) throw new Error(error.message);
 
   const response: any = { ...data, tag_substitutions: substitutions };
+  const warnings: string[] = [];
   if (!providedReason) {
-    response.warning =
+    warnings.push(
       'change_reason was not provided. The supersession succeeded but the reasoning breadcrumb is missing. ' +
-      'Ask the user why the change was made and call update_change_reason with decision_id ' + data.id + ' to fill it in.';
+      'Ask the user why the change was made and call update_change_reason with decision_id ' + data.id + ' to fill it in.'
+    );
   }
+  if (!provenance) {
+    warnings.push(
+      'provenance was not provided. If you can articulate what you consulted to reach this decision, ' +
+      'call update_provenance with decision_id ' + data.id + ' to fill it in.'
+    );
+  }
+  if (warnings.length > 0) response.warnings = warnings;
   return JSON.stringify(response, null, 2);
 }
 
