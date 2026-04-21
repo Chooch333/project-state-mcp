@@ -148,7 +148,7 @@ async function getProjectDashboard(supabase: SupabaseClient, args: Args): Promis
   // Synthesize a one-line status if no snapshot exists
   const statusLine =
     snapshot.data?.narrative ??
-    `No status snapshot yet. Project has ${decisionsCt.count ?? 0} active decisions and ${nextMovesCt.count ?? 0} open next moves.`;
+    `No status snapshot yet. Project has ${activeDecisionsCount} active decisions and ${nextMovesCt.count ?? 0} open next moves.`;
 
   const statusAge = snapshot.data?.created_at
     ? daysAgo(new Date(snapshot.data.created_at), now)
