@@ -1056,7 +1056,7 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
 async function addAssumption(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.assumption(args.statement, args.alternatives));
-  const tags = normTags(args.tags);
+  const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
   const { data, error } = await supabase.from('assumptions').insert({
     project_id: projectId,
     statement: args.statement,
@@ -1066,7 +1066,7 @@ async function addAssumption(supabase: SupabaseClient, args: Args): Promise<stri
     embedding: toPgVector(embedding),
   }).select('id, statement, alternatives, status, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify(data, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
 
 async function updateAssumption(supabase: SupabaseClient, args: Args): Promise<string> {
