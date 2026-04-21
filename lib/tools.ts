@@ -8,10 +8,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        include_archived: {
-          type: 'boolean',
-          description: 'Include archived projects in results. Defaults to false.',
-        },
+        include_archived: { type: 'boolean', description: 'Include archived projects in results. Defaults to false.' },
       },
     },
   },
@@ -30,12 +27,12 @@ export const TOOLS = [
   },
   {
     name: 'search_state',
-    description: 'Semantic search across all project-state content (decisions, assumptions, blockers, next_moves, plans, snapshots, notes, lessons). Returns the most relevant rows by meaning, not just keyword match. Use this when you need to find things related to a topic without knowing exactly where they were logged.',
+    description: 'Semantic search across all project-state content. Returns the most relevant rows by meaning, not just keyword match. Use when you need to find things related to a topic without knowing exactly where they were logged. For exact-tag retrieval (faster, deterministic), use find_by_tags instead.',
     inputSchema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'What to search for. Can be a question, a topic, or a description.' },
-        project_slug: { type: 'string', description: 'Optional: limit search to one project. Omit to search across all projects.' },
+        query: { type: 'string', description: 'What to search for. A question, topic, or description.' },
+        project_slug: { type: 'string', description: 'Optional: limit search to one project.' },
         entity_types: {
           type: 'array',
           items: { type: 'string', enum: ['decision', 'assumption', 'blocker', 'next_move', 'plan', 'snapshot', 'note', 'lesson'] },
@@ -47,12 +44,54 @@ export const TOOLS = [
     },
   },
   {
-    name: 'create_project',
-    description: 'Register a new project in the state database. Use this to onboard a project before any other writes.',
+    name: 'find_by_tags',
+    description: 'Exact-tag retrieval across all entity types. Faster and deterministic compared to search_state. Use when you have a specific tag and want all rows matching.',
     inputSchema: {
       type: 'object',
       properties: {
-        slug: { type: 'string', description: 'Stable, kebab-case identifier, e.g. "family-trip-app".' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'One or more tags to match.' },
+        match_mode: { type: 'string', enum: ['any', 'all'], description: 'any = row has at least one of the given tags; all = row has every given tag. Default: any.' },
+        project_slug: { type: 'string', description: 'Optional: limit to one project.' },
+        entity_types: {
+          type: 'array',
+          items: { type: 'string', enum: ['decision', 'assumption', 'blocker', 'next_move', 'plan', 'snapshot', 'note', 'lesson'] },
+          description: 'Optional: filter to specific entity types.',
+        },
+        limit: { type: 'number', description: 'Max results per entity type. Default 50.' },
+      },
+      required: ['tags'],
+    },
+  },
+  {
+    name: 'list_tags',
+    description: 'List all tags currently used across a project (or all projects), with counts. Useful for discovering what tags already exist so you stay consistent.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_slug: { type: 'string', description: 'Optional: limit to one project.' },
+      },
+    },
+  },
+  {
+    name: 'add_tags',
+    description: 'Add tags to an existing row without changing any other content. Use when you realize after logging that a row should carry additional tags.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        entity_type: { type: 'string', enum: ['decision', 'assumption', 'blocker', 'next_move', 'plan', 'snapshot', 'note', 'lesson'] },
+        id: { type: 'string', description: 'The row id.' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Tags to add. Duplicates with existing tags are ignored.' },
+      },
+      required: ['entity_type', 'id', 'tags'],
+    },
+  },
+  {
+    name: 'create_project',
+    description: 'Register a new project in the state database.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: { type: 'string', description: 'Stable, kebab-case identifier.' },
         name: { type: 'string' },
         description: { type: 'string' },
         repo_url: { type: 'string' },
@@ -64,13 +103,14 @@ export const TOOLS = [
   },
   {
     name: 'add_note',
-    description: 'Low-friction capture. Use for anything worth remembering that does not yet fit a structured entity — observations, half-baked ideas, context, things mentioned in passing. Prefer this over forcing content into a decision or blocker when uncertain. Can be promoted later via promote_note.',
+    description: 'Low-friction capture. Use for anything worth remembering that does not yet fit a structured entity. Can be promoted later via promote_note.',
     inputSchema: {
       type: 'object',
       properties: {
         project_slug: { type: 'string' },
         content: { type: 'string', description: 'The note text. Any length.' },
-        topic: { type: 'string', description: 'Optional tag for retrieval, e.g. "auth", "photos", "build-manager".' },
+        topic: { type: 'string', description: 'Optional single-string topic label.' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags for retrieval (multi-tag supported).' },
         source: { type: 'string' },
       },
       required: ['project_slug', 'content', 'source'],
@@ -78,13 +118,12 @@ export const TOOLS = [
   },
   {
     name: 'promote_note',
-    description: 'Convert an existing note into a structured entity (decision, assumption, blocker, next_move, or lesson). The original note is preserved with a pointer to the promoted entity. Use when a note has earned its promotion — e.g. a loose observation has become a clear decision.',
+    description: 'Convert an existing note into a structured entity. The original note is preserved with a pointer to the promoted entity. Tags carry over unless overridden.',
     inputSchema: {
       type: 'object',
       properties: {
         note_id: { type: 'string' },
         target_entity: { type: 'string', enum: ['decision', 'assumption', 'blocker', 'next_move', 'lesson'] },
-        // Fields needed by the target entity — provide whichever are required for target
         title: { type: 'string' },
         rationale: { type: 'string' },
         alternatives_considered: { type: 'string' },
@@ -99,6 +138,7 @@ export const TOOLS = [
         lesson: { type: 'string' },
         applies_to: { type: 'string' },
         severity: { type: 'string', enum: ['minor', 'normal', 'major'] },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Optional: override tags for the promoted row. Default: copy from the note.' },
         source: { type: 'string' },
       },
       required: ['note_id', 'target_entity', 'source'],
@@ -106,15 +146,16 @@ export const TOOLS = [
   },
   {
     name: 'add_lesson',
-    description: 'Record a retrospective observation: what happened, what we learned. Use for "we built X and it didn\'t work because Y," "tried approach Z, here\'s why we abandoned it," or general insight from a completed piece of work.',
+    description: 'Record a retrospective observation: what happened, what we learned.',
     inputSchema: {
       type: 'object',
       properties: {
         project_slug: { type: 'string' },
-        situation: { type: 'string', description: 'What happened or what was tried.' },
-        lesson: { type: 'string', description: 'What we learned from it.' },
-        applies_to: { type: 'string', description: 'Optional: context tags for future retrieval.' },
+        situation: { type: 'string' },
+        lesson: { type: 'string' },
+        applies_to: { type: 'string' },
         severity: { type: 'string', enum: ['minor', 'normal', 'major'] },
+        tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
       },
       required: ['project_slug', 'situation', 'lesson', 'source'],
@@ -122,7 +163,7 @@ export const TOOLS = [
   },
   {
     name: 'log_decision',
-    description: 'Record a closed decision with rationale. Decisions are immutable once written; to change, use supersede_decision. Use only when something is genuinely settled — for in-progress thinking, use add_note.',
+    description: 'Record a closed decision with rationale. Immutable once written; to change, use supersede_decision.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -130,6 +171,7 @@ export const TOOLS = [
         title: { type: 'string' },
         rationale: { type: 'string' },
         alternatives_considered: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
       },
       required: ['project_slug', 'title', 'rationale', 'source'],
@@ -137,7 +179,7 @@ export const TOOLS = [
   },
   {
     name: 'supersede_decision',
-    description: 'Replace an existing decision with a new one. The old decision remains in history; a new row is created pointing back to it.',
+    description: 'Replace an existing decision with a new one. The old decision remains in history.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -145,6 +187,7 @@ export const TOOLS = [
         new_title: { type: 'string' },
         new_rationale: { type: 'string' },
         new_alternatives_considered: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
       },
       required: ['old_decision_id', 'new_title', 'new_rationale', 'source'],
@@ -159,6 +202,7 @@ export const TOOLS = [
         project_slug: { type: 'string' },
         statement: { type: 'string' },
         alternatives: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
       },
       required: ['project_slug', 'statement', 'source'],
@@ -186,6 +230,7 @@ export const TOOLS = [
         project_slug: { type: 'string' },
         question: { type: 'string' },
         context: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
       },
       required: ['project_slug', 'question', 'source'],
@@ -213,6 +258,7 @@ export const TOOLS = [
         description: { type: 'string' },
         priority: { type: 'string', enum: ['urgent', 'normal', 'someday'] },
         estimated_effort: { type: 'string', enum: ['small', 'medium', 'large'] },
+        tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
       },
       required: ['project_slug', 'description', 'source'],
@@ -220,7 +266,7 @@ export const TOOLS = [
   },
   {
     name: 'complete_next_move',
-    description: 'Mark a next move as completed. Optionally link it to the plan that completed it.',
+    description: 'Mark a next move as completed.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -232,13 +278,14 @@ export const TOOLS = [
   },
   {
     name: 'write_plan',
-    description: 'Store a build plan document. Status starts as "draft". Use update_plan_status to bless, start executing, or mark complete.',
+    description: 'Store a build plan document.',
     inputSchema: {
       type: 'object',
       properties: {
         project_slug: { type: 'string' },
         title: { type: 'string' },
-        content: { type: 'string', description: 'Full plan markdown.' },
+        content: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
       },
       required: ['project_slug', 'title', 'content', 'source'],
@@ -246,7 +293,7 @@ export const TOOLS = [
   },
   {
     name: 'update_plan_status',
-    description: 'Transition a plan through its lifecycle: draft → blessed → executing → complete (or abandoned). Optionally attach an executor_report when marking complete.',
+    description: 'Transition a plan through its lifecycle: draft → blessed → executing → complete/abandoned.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -270,12 +317,13 @@ export const TOOLS = [
   },
   {
     name: 'write_status_snapshot',
-    description: 'Write a brief narrative summary of where the project is right now. Latest snapshot is what get_project_state returns.',
+    description: 'Write a brief narrative summary of where the project is right now.',
     inputSchema: {
       type: 'object',
       properties: {
         project_slug: { type: 'string' },
         narrative: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
       },
       required: ['project_slug', 'narrative', 'source'],
