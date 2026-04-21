@@ -123,9 +123,11 @@ async function getProjectDashboard(supabase: SupabaseClient, args: Args): Promis
     supabase.from('blockers').select('id, question, created_at').eq('project_id', projectId).gte('created_at', sevenDaysAgo).order('created_at', { ascending: false }),
     supabase.from('blockers').select('id, question, resolved_at').eq('project_id', projectId).not('resolved_at', 'is', null).gte('resolved_at', sevenDaysAgo).order('resolved_at', { ascending: false }),
     supabase.from('next_moves').select('id, description, completed_at').eq('project_id', projectId).not('completed_at', 'is', null).gte('completed_at', sevenDaysAgo).order('completed_at', { ascending: false }),
-    // Scale counts — total active entities
+    // Scale counts — total active entities.
+    // Decisions need the full list (not head-only count) so we can filter out
+    // any that have been superseded by another decision.
     Promise.all([
-      supabase.from('decisions').select('id', { count: 'exact', head: true }).eq('project_id', projectId).is('supersedes', null),
+      supabase.from('decisions').select('id, supersedes').eq('project_id', projectId),
       supabase.from('assumptions').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('status', 'active'),
       supabase.from('blockers').select('id', { count: 'exact', head: true }).eq('project_id', projectId).is('resolved_at', null),
       supabase.from('next_moves').select('id', { count: 'exact', head: true }).eq('project_id', projectId).is('completed_at', null),
@@ -137,7 +139,11 @@ async function getProjectDashboard(supabase: SupabaseClient, args: Args): Promis
 
   if (!project.data) throw new Error(`Project not found: ${args.project_slug}`);
 
-  const [decisionsCt, assumptionsCt, blockersCt, nextMovesCt, notesCt, lessonsCt, plansCt] = scaleCounts;
+  const [decisionsAll, assumptionsCt, blockersCt, nextMovesCt, notesCt, lessonsCt, plansCt] = scaleCounts;
+
+  // Active decisions = those not superseded by any other decision.
+  const supersededDecIds = new Set((decisionsAll.data ?? []).map((d: any) => d.supersedes).filter(Boolean));
+  const activeDecisionsCount = (decisionsAll.data ?? []).filter((d: any) => !supersededDecIds.has(d.id)).length;
 
   // Synthesize a one-line status if no snapshot exists
   const statusLine =
