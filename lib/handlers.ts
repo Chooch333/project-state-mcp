@@ -1049,6 +1049,13 @@ async function logDecision(supabase: SupabaseClient, args: Args): Promise<string
 }
 
 async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<string> {
+  // Enforce change_reason. This is separate from new_rationale: rationale justifies
+  // the new decision on its own terms; change_reason explains why we moved from
+  // the old one to this one. Future readers need the latter to follow the reasoning.
+  if (!args.change_reason || typeof args.change_reason !== 'string' || args.change_reason.trim().length === 0) {
+    throw new Error('change_reason is required. Explain why we are moving from the old decision to this new one — what changed, what became clear, why now. This creates the breadcrumb trail for future readers.');
+  }
+
   const { data: oldRow, error: oldErr } = await supabase.from('decisions').select('project_id, tags').eq('id', args.old_decision_id).maybeSingle();
   if (oldErr) throw new Error(oldErr.message);
   if (!oldRow) throw new Error(`Decision not found: ${args.old_decision_id}`);
@@ -1071,13 +1078,104 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
     title: args.new_title,
     rationale: args.new_rationale,
     alternatives_considered: args.new_alternatives_considered ?? null,
+    change_reason: args.change_reason.trim(),
     tags,
     source: args.source,
     supersedes: args.old_decision_id,
     embedding: toPgVector(embedding),
-  }).select('id, title, rationale, tags, source, supersedes, decided_at').single();
+  }).select('id, title, rationale, change_reason, tags, source, supersedes, decided_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
+}
+
+// ─────────────────────────────────────────────────────────
+// Decision chain walker
+// Given any decision ID, returns the full supersession history:
+// ancestors (via backward walk of `supersedes` pointers) + descendants
+// (via forward walk of decisions that supersede this one).
+// Each transition includes the change_reason so the reader can see
+// how the thinking evolved.
+// ─────────────────────────────────────────────────────────
+
+async function getDecisionChain(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (!args.decision_id) throw new Error('decision_id is required');
+
+  // Anchor: fetch the starting decision
+  const { data: anchor, error: anchorErr } = await supabase
+    .from('decisions')
+    .select('id, project_id, title, rationale, alternatives_considered, change_reason, tags, source, supersedes, decided_at')
+    .eq('id', args.decision_id)
+    .maybeSingle();
+  if (anchorErr) throw new Error(anchorErr.message);
+  if (!anchor) throw new Error(`Decision not found: ${args.decision_id}`);
+
+  // Walk backward through ancestors
+  const ancestors: any[] = [];
+  let cursor: any = anchor;
+  const visited = new Set<string>([anchor.id]); // cycle guard (shouldn't happen, but safe)
+  while (cursor.supersedes) {
+    if (visited.has(cursor.supersedes)) break;
+    visited.add(cursor.supersedes);
+    const { data: parent, error } = await supabase
+      .from('decisions')
+      .select('id, project_id, title, rationale, alternatives_considered, change_reason, tags, source, supersedes, decided_at')
+      .eq('id', cursor.supersedes)
+      .maybeSingle();
+    if (error) throw new Error(`Chain walk backward: ${error.message}`);
+    if (!parent) break;
+    ancestors.push(parent);
+    cursor = parent;
+  }
+
+  // Walk forward through descendants
+  const descendants: any[] = [];
+  let forwardCursor: any = anchor;
+  const forwardVisited = new Set<string>([anchor.id]);
+  while (true) {
+    const { data: child, error } = await supabase
+      .from('decisions')
+      .select('id, project_id, title, rationale, alternatives_considered, change_reason, tags, source, supersedes, decided_at')
+      .eq('supersedes', forwardCursor.id)
+      .maybeSingle();
+    if (error) throw new Error(`Chain walk forward: ${error.message}`);
+    if (!child) break;
+    if (forwardVisited.has(child.id)) break;
+    forwardVisited.add(child.id);
+    descendants.push(child);
+    forwardCursor = child;
+  }
+
+  // Build the full ordered chain: oldest ancestor → ... → anchor → ... → newest descendant
+  // ancestors is already ordered newest→oldest from the walk, so reverse it
+  const chain = [...ancestors.reverse(), anchor, ...descendants];
+
+  // Build transition list: pairs of (from → to) with change_reason
+  const transitions = [];
+  for (let i = 1; i < chain.length; i++) {
+    const prev = chain[i - 1];
+    const curr = chain[i];
+    transitions.push({
+      from_decision_id: prev.id,
+      from_title: prev.title,
+      to_decision_id: curr.id,
+      to_title: curr.title,
+      transition_date: curr.decided_at,
+      change_reason: curr.change_reason,
+    });
+  }
+
+  // The current (active) decision is the last one in the chain — the one NOT superseded by anything
+  const currentDecision = chain[chain.length - 1];
+  const isAnchorCurrent = currentDecision.id === anchor.id;
+
+  return JSON.stringify({
+    anchor_id: anchor.id,
+    anchor_is_current: isAnchorCurrent,
+    current_decision_id: currentDecision.id,
+    chain_length: chain.length,
+    chain,
+    transitions,
+  }, null, 2);
 }
 
 // ─────────────────────────────────────────────────────────
