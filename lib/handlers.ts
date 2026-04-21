@@ -1048,17 +1048,32 @@ async function logDecision(supabase: SupabaseClient, args: Args): Promise<string
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.decision(args.title, args.rationale, args.alternatives_considered));
   const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
+
+  // provenance: optional. If provided, clean and store. If not, store null and warn.
+  const provenance = (typeof args.provenance === 'string' && args.provenance.trim().length > 0)
+    ? args.provenance.trim()
+    : null;
+
   const { data, error } = await supabase.from('decisions').insert({
     project_id: projectId,
     title: args.title,
     rationale: args.rationale,
     alternatives_considered: args.alternatives_considered ?? null,
+    provenance,
     tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, title, rationale, alternatives_considered, tags, source, decided_at').single();
+  }).select('id, title, rationale, alternatives_considered, provenance, tags, source, decided_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
+
+  const response: any = { ...data, tag_substitutions: substitutions };
+  if (!provenance) {
+    response.warning =
+      'provenance was not provided. The decision is recorded but "how we got here" is not captured. ' +
+      'If you can articulate what you consulted (web search, MCP tool calls, uploaded files, prior decisions) or if the user knows, ' +
+      'call update_provenance with decision_id ' + data.id + ' to fill it in.';
+  }
+  return JSON.stringify(response, null, 2);
 }
 
 async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<string> {
