@@ -212,7 +212,7 @@ export const TOOLS = [
   },
   {
     name: 'supersede_decision',
-    description: 'Replace an existing decision with a new one. The old decision remains in history. You must supply BOTH new_rationale (why the new decision is right on its own terms) AND change_reason (why you are moving from the old decision to the new one). The change_reason creates the breadcrumb trail so future readers can see how the thinking evolved — without it, the supersession chain loses its meaning.',
+    description: 'Replace an existing decision with a new one. The old decision remains in history. Always try to supply change_reason — a short explanation of why we are moving from the old decision to this new one. This is distinct from new_rationale: rationale justifies the new decision on its own terms; change_reason explains the transition. If you are not sure of the reason, ASK the user rather than fabricating a generic placeholder. If the user does not know and tells you to proceed, call this tool without change_reason and the response will include a warning that you should relay to the user. Never invent a default like "general improvement" — a null change_reason is more useful than a meaningless one.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -220,11 +220,11 @@ export const TOOLS = [
         new_title: { type: 'string' },
         new_rationale: { type: 'string', description: 'Why the new decision is right on its own terms.' },
         new_alternatives_considered: { type: 'string' },
-        change_reason: { type: 'string', description: 'Why we are moving from the old decision to this new one. What changed or became clear. This is REQUIRED.' },
+        change_reason: { type: 'string', description: 'Why we are moving from the old decision to this new one. Strongly preferred — ask the user if unclear, never fabricate.' },
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
       },
-      required: ['old_decision_id', 'new_title', 'new_rationale', 'change_reason', 'source'],
+      required: ['old_decision_id', 'new_title', 'new_rationale', 'source'],
     },
   },
   {
@@ -236,6 +236,18 @@ export const TOOLS = [
         decision_id: { type: 'string', description: 'Any decision in the chain — the walker finds both ancestors and descendants.' },
       },
       required: ['decision_id'],
+    },
+  },
+  {
+    name: 'update_change_reason',
+    description: 'Fill in or amend the change_reason on a superseding decision. Use when change_reason was skipped at supersession time (got a warning about it), when the user later clarifies WHY the transition happened, or when a better articulation of the reason emerges. Only works on decisions that actually supersede another (originals have no transition to explain).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        decision_id: { type: 'string' },
+        change_reason: { type: 'string' },
+      },
+      required: ['decision_id', 'change_reason'],
     },
   },
   {
