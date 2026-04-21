@@ -638,6 +638,17 @@ async function searchState(supabase: SupabaseClient, args: Args): Promise<string
   const query: string = args.query;
   if (!query?.trim()) throw new Error('query is required');
 
+  // Guardrail: require explicit scope choice. Pass project_slug to scope to one project,
+  // or all_projects=true to explicitly search across every project. Omitting both is an error
+  // to prevent accidental cross-project leakage when a user is working within a single project.
+  if (!args.project_slug && args.all_projects !== true) {
+    throw new Error(
+      'Scope is required. Pass project_slug to search within one project, ' +
+      'or pass all_projects=true to explicitly search across every project. ' +
+      'This guardrail prevents accidental cross-project leakage.'
+    );
+  }
+
   const limit = Math.max(1, Math.min(args.limit ?? 10, 50));
   const entityTypes: string[] | undefined = args.entity_types;
 
@@ -648,6 +659,11 @@ async function searchState(supabase: SupabaseClient, args: Args): Promise<string
   if (args.project_slug) {
     projectId = await resolveProjectId(supabase, args.project_slug);
   }
+
+  // Resolve project slug map for labeling results (when scanning all projects)
+  const { data: projectRows } = await supabase.from('projects').select('id, slug');
+  const idToSlug = new Map<string, string>();
+  (projectRows ?? []).forEach((p: any) => idToSlug.set(p.id, p.slug));
 
   const allowed = (t: string) => !entityTypes || entityTypes.includes(t);
   const results: any[] = [];
@@ -660,7 +676,7 @@ async function searchState(supabase: SupabaseClient, args: Args): Promise<string
   ) => {
     if (!allowed(entityType)) return;
 
-    let q = supabase.from(table).select(`${selectFields}, embedding, tags, created_at`);
+    let q = supabase.from(table).select(`${selectFields}, embedding, tags, project_id, created_at`);
     if (projectId) q = q.eq('project_id', projectId);
 
     const { data, error } = await q.order(orderField, { ascending: false }).limit(200);
@@ -677,9 +693,10 @@ async function searchState(supabase: SupabaseClient, args: Args): Promise<string
         score = content.toLowerCase().includes(lowerQ) ? 0.5 : 0.0;
       }
       if (score > 0.3) {
-        const { embedding, ...rest } = row;
+        const { embedding, project_id, ...rest } = row;
         results.push({
           entity_type: entityType,
+          project_slug: idToSlug.get(project_id) ?? project_id,
           similarity: Number(score.toFixed(4)),
           ...rest,
         });
@@ -701,10 +718,18 @@ async function searchState(supabase: SupabaseClient, args: Args): Promise<string
   results.sort((a, b) => b.similarity - a.similarity);
   const top = results.slice(0, limit);
 
+  // Count results by project for cross-project searches
+  const projectCounts: Record<string, number> = {};
+  for (const r of top) {
+    projectCounts[r.project_slug] = (projectCounts[r.project_slug] ?? 0) + 1;
+  }
+
   return JSON.stringify({
     query,
+    scope: args.project_slug ? { project_slug: args.project_slug } : { all_projects: true },
     method: hasEmbedding ? 'semantic' : 'keyword-fallback',
     result_count: top.length,
+    project_counts: projectCounts,
     results: top,
   }, null, 2);
 }
