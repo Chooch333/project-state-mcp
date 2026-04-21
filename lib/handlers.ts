@@ -108,6 +108,8 @@ export async function callTool(name: string, args: Args): Promise<string> {
       return updatePlanStatus(supabase, args);
     case 'get_plan':
       return getPlan(supabase, args);
+    case 'list_plans':
+      return listPlans(supabase, args);
     case 'write_status_snapshot':
       return writeStatusSnapshot(supabase, args);
     case 'describe_capabilities':
