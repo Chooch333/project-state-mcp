@@ -739,13 +739,27 @@ async function searchState(supabase: SupabaseClient, args: Args): Promise<string
 // ─────────────────────────────────────────────────────────
 
 async function findByTags(supabase: SupabaseClient, args: Args): Promise<string> {
+  // Guardrail: require explicit scope choice.
+  if (!args.project_slug && args.all_projects !== true) {
+    throw new Error(
+      'Scope is required. Pass project_slug to search within one project, ' +
+      'or pass all_projects=true to explicitly search across every project. ' +
+      'This guardrail prevents accidental cross-project leakage.'
+    );
+  }
+
   // Resolve project scope first so expansion is project-aware
   let projectId: string | null = null;
   if (args.project_slug) {
     projectId = await resolveProjectId(supabase, args.project_slug);
   }
 
-  // Normalize and fuzzy-expand the input tags against existing DB tags
+  // Resolve project slug map for labeling results
+  const { data: projectRows } = await supabase.from('projects').select('id, slug');
+  const idToSlug = new Map<string, string>();
+  (projectRows ?? []).forEach((p: any) => idToSlug.set(p.id, p.slug));
+
+  // Normalize and fuzzy-expand the input tags against existing DB tags (scoped to project or global based on projectId)
   const { tags: expandedTags, expansions } = await expandForQuery(supabase, args.tags, projectId);
   if (expandedTags.length === 0) throw new Error('tags array must contain at least one non-empty tag after normalization');
 
@@ -764,13 +778,9 @@ async function findByTags(supabase: SupabaseClient, args: Args): Promise<string>
   ) => {
     if (!allowed(entityType)) return;
 
-    let q = supabase.from(table).select(`${selectFields}, tags, created_at`);
+    let q = supabase.from(table).select(`${selectFields}, tags, project_id, created_at`);
     if (projectId) q = q.eq('project_id', projectId);
     if (matchMode === 'all') {
-      // For "all", we want rows that contain every originally-requested tag (not expansions).
-      // Expansion only makes sense in "any" mode — "all" requires exact co-occurrence.
-      // Use the normalized input (first entry of expandedTags before expansions were added).
-      // But since expandForQuery mixes them, approximate by requiring at least one expansion set match.
       q = q.contains('tags', expandedTags);
     } else {
       q = q.overlaps('tags', expandedTags);
@@ -781,7 +791,12 @@ async function findByTags(supabase: SupabaseClient, args: Args): Promise<string>
     if (!data) return;
 
     for (const row of data) {
-      results.push({ entity_type: entityType, ...row });
+      const { project_id, ...rest } = row;
+      results.push({
+        entity_type: entityType,
+        project_slug: idToSlug.get(project_id) ?? project_id,
+        ...rest,
+      });
     }
   };
 
@@ -796,11 +811,19 @@ async function findByTags(supabase: SupabaseClient, args: Args): Promise<string>
     runTagQuery('lesson', 'lessons', 'id, situation, lesson, applies_to, severity, source', 'created_at'),
   ]);
 
+  // Count results by project for cross-project searches
+  const projectCounts: Record<string, number> = {};
+  for (const r of results) {
+    projectCounts[r.project_slug] = (projectCounts[r.project_slug] ?? 0) + 1;
+  }
+
   return JSON.stringify({
+    scope: args.project_slug ? { project_slug: args.project_slug } : { all_projects: true },
     match_mode: matchMode,
     tags_queried: expandedTags,
     tag_expansions: expansions,
     result_count: results.length,
+    project_counts: projectCounts,
     results,
   }, null, 2);
 }
