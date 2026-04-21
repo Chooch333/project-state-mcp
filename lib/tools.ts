@@ -434,7 +434,7 @@ export const TOOLS = [
   },
   {
     name: 'write_status_snapshot',
-    description: 'Write a brief narrative summary of where the project is right now.',
+    description: 'Write a brief narrative summary of where the project is right now. Pass optional observed_at to describe a prior moment when seeding from old chats.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -442,6 +442,7 @@ export const TOOLS = [
         narrative: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
+        observed_at: { type: 'string', description: 'Optional ISO 8601 timestamp override — when the narrative describes (not when you wrote it). Defaults to now().' },
       },
       required: ['project_slug', 'narrative', 'source'],
     },
