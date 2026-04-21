@@ -212,18 +212,30 @@ export const TOOLS = [
   },
   {
     name: 'supersede_decision',
-    description: 'Replace an existing decision with a new one. The old decision remains in history.',
+    description: 'Replace an existing decision with a new one. The old decision remains in history. You must supply BOTH new_rationale (why the new decision is right on its own terms) AND change_reason (why you are moving from the old decision to the new one). The change_reason creates the breadcrumb trail so future readers can see how the thinking evolved — without it, the supersession chain loses its meaning.',
     inputSchema: {
       type: 'object',
       properties: {
         old_decision_id: { type: 'string' },
         new_title: { type: 'string' },
-        new_rationale: { type: 'string' },
+        new_rationale: { type: 'string', description: 'Why the new decision is right on its own terms.' },
         new_alternatives_considered: { type: 'string' },
+        change_reason: { type: 'string', description: 'Why we are moving from the old decision to this new one. What changed or became clear. This is REQUIRED.' },
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
       },
-      required: ['old_decision_id', 'new_title', 'new_rationale', 'source'],
+      required: ['old_decision_id', 'new_title', 'new_rationale', 'change_reason', 'source'],
+    },
+  },
+  {
+    name: 'get_decision_chain',
+    description: 'Walk the supersession history for a decision. Given any decision ID, returns the full chain: every predecessor decision (walking backward via supersedes pointers) and every successor decision (walking forward by finding decisions that supersede this one). Each transition shows the change_reason, so you can see how thinking evolved. Use when the person asks "how did we land on X," "what was the original decision about X," "why did we change from Y to Z," or anything about a decision''s history.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        decision_id: { type: 'string', description: 'Any decision in the chain — the walker finds both ancestors and descendants.' },
+      },
+      required: ['decision_id'],
     },
   },
   {
