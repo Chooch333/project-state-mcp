@@ -366,6 +366,33 @@ export const TOOLS = [
     },
   },
   {
+    name: 'update_plan_content',
+    description: 'Edit a plan\'s content, creating a new revision snapshot. Every time you call this, the plan\'s current_revision increments and a row is added to plan_revisions capturing the new state. Use when the plan has evolved — the user iterated on the approach, refined the scope, or added detail. Do NOT use for status transitions (draft → blessed → executing → complete); use update_plan_status for that. Always try to supply change_reason — a short explanation of why the plan evolved. If unclear, ask the user; the response will warn you if you leave it empty. new_title is optional and defaults to the current title.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        new_content: { type: 'string', description: 'The full new content of the plan. This replaces the current content entirely; the previous content is preserved in plan_revisions.' },
+        new_title: { type: 'string', description: 'Optional new title. Defaults to the current title if omitted.' },
+        change_reason: { type: 'string', description: 'Why the plan was edited. Strongly preferred; ask the user if unclear; never fabricate.' },
+        source: { type: 'string', description: 'Who/what made this revision. Defaults to the plan\'s existing source.' },
+      },
+      required: ['plan_id', 'new_content'],
+    },
+  },
+  {
+    name: 'get_plan_revisions',
+    description: 'Walk the revision history of a plan. Returns all revisions ordered newest-first, each with its revision_number, title, change_reason, source, and creation time. By default returns metadata only (no content) to keep responses compact; pass include_content=true to fetch the actual content of every revision. Use when the person asks "how has this plan evolved," "what did version 2 say," "when did we change the plan," or anything about a plan\'s history.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        include_content: { type: 'boolean', description: 'If true, include the full content of every revision in the response. Default false (metadata only).' },
+      },
+      required: ['plan_id'],
+    },
+  },
+  {
     name: 'update_plan_status',
     description: 'Transition a plan through its lifecycle.',
     inputSchema: {
