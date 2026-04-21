@@ -1465,14 +1465,19 @@ async function addBlocker(supabase: SupabaseClient, args: Args): Promise<string>
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.blocker(args.question, args.context));
   const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
-  const { data, error } = await supabase.from('blockers').insert({
+  // raised_at is the user-facing name (blockers are raised); stored in created_at.
+  const raisedAt = parseOverrideTimestamp(args.raised_at, 'raised_at');
+  const insertRow: any = {
     project_id: projectId,
     question: args.question,
     context: args.context ?? null,
     tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, question, context, tags, source, created_at').single();
+  };
+  if (raisedAt) insertRow.created_at = raisedAt;
+  const { data, error } = await supabase.from('blockers').insert(insertRow)
+    .select('id, question, context, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
