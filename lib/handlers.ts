@@ -1499,7 +1499,8 @@ async function addNextMove(supabase: SupabaseClient, args: Args): Promise<string
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.nextMove(args.description));
   const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
-  const { data, error } = await supabase.from('next_moves').insert({
+  const createdAt = parseOverrideTimestamp(args.created_at, 'created_at');
+  const insertRow: any = {
     project_id: projectId,
     description: args.description,
     priority: args.priority ?? 'normal',
@@ -1507,7 +1508,10 @@ async function addNextMove(supabase: SupabaseClient, args: Args): Promise<string
     tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, description, priority, estimated_effort, tags, source, created_at').single();
+  };
+  if (createdAt) insertRow.created_at = createdAt;
+  const { data, error } = await supabase.from('next_moves').insert(insertRow)
+    .select('id, description, priority, estimated_effort, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
