@@ -59,6 +59,8 @@ export async function callTool(name: string, args: Args): Promise<string> {
       return logDecision(supabase, args);
     case 'supersede_decision':
       return supersedeDecision(supabase, args);
+    case 'get_decision_chain':
+      return getDecisionChain(supabase, args);
     case 'add_assumption':
       return addAssumption(supabase, args);
     case 'update_assumption':
