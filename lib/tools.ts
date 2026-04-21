@@ -3,6 +3,14 @@
 
 export const TOOLS = [
   {
+    name: 'describe_capabilities',
+    description: 'Returns a compact self-description of this MCP: what it is for, what entities it tracks, what standing principles govern behavior, what tool categories exist, currently-registered projects, and tips for using it well. Call this FIRST in a new chat if you are unfamiliar with this system — one call gives you the full picture instead of reading 30+ tool descriptions piecemeal. Safe to call anytime; no side effects.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
     name: 'get_project_dashboard',
     description: 'AT-A-GLANCE summary of a project. Returns a fixed-shape dashboard: one-sentence status, top urgent blocker, top urgent next_move, what is new in the last 7 days, and counts. Use this when the person asks anything resembling "how is X going," "what is up with X," "give me a rundown on X," "state of X." Prefer this over get_project_state for quick overviews; use get_project_state only when they explicitly want the full dump.',
     inputSchema: {
