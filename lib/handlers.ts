@@ -981,14 +981,18 @@ async function addNote(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.note(args.content, args.topic));
   const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
-  const { data, error } = await supabase.from('notes').insert({
+  const createdAt = parseOverrideTimestamp(args.created_at, 'created_at');
+  const insertRow: any = {
     project_id: projectId,
     content: args.content,
     topic: args.topic ?? null,
     tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, content, topic, tags, source, created_at').single();
+  };
+  if (createdAt) insertRow.created_at = createdAt;
+  const { data, error } = await supabase.from('notes').insert(insertRow)
+    .select('id, content, topic, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
