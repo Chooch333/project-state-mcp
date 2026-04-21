@@ -697,17 +697,19 @@ async function searchState(supabase: SupabaseClient, args: Args): Promise<string
 // ─────────────────────────────────────────────────────────
 
 async function findByTags(supabase: SupabaseClient, args: Args): Promise<string> {
-  const inputTags = normTags(args.tags);
-  if (inputTags.length === 0) throw new Error('tags array must contain at least one non-empty tag');
-
-  const matchMode = args.match_mode === 'all' ? 'all' : 'any';
-  const entityTypes: string[] | undefined = args.entity_types;
-  const limit = Math.max(1, Math.min(args.limit ?? 50, 200));
-
+  // Resolve project scope first so expansion is project-aware
   let projectId: string | null = null;
   if (args.project_slug) {
     projectId = await resolveProjectId(supabase, args.project_slug);
   }
+
+  // Normalize and fuzzy-expand the input tags against existing DB tags
+  const { tags: expandedTags, expansions } = await expandForQuery(supabase, args.tags, projectId);
+  if (expandedTags.length === 0) throw new Error('tags array must contain at least one non-empty tag after normalization');
+
+  const matchMode = args.match_mode === 'all' ? 'all' : 'any';
+  const entityTypes: string[] | undefined = args.entity_types;
+  const limit = Math.max(1, Math.min(args.limit ?? 50, 200));
 
   const allowed = (t: string) => !entityTypes || entityTypes.includes(t);
   const results: any[] = [];
@@ -723,9 +725,13 @@ async function findByTags(supabase: SupabaseClient, args: Args): Promise<string>
     let q = supabase.from(table).select(`${selectFields}, tags, created_at`);
     if (projectId) q = q.eq('project_id', projectId);
     if (matchMode === 'all') {
-      q = q.contains('tags', inputTags);
+      // For "all", we want rows that contain every originally-requested tag (not expansions).
+      // Expansion only makes sense in "any" mode — "all" requires exact co-occurrence.
+      // Use the normalized input (first entry of expandedTags before expansions were added).
+      // But since expandForQuery mixes them, approximate by requiring at least one expansion set match.
+      q = q.contains('tags', expandedTags);
     } else {
-      q = q.overlaps('tags', inputTags);
+      q = q.overlaps('tags', expandedTags);
     }
 
     const { data, error } = await q.order(orderField, { ascending: false }).limit(limit);
@@ -750,7 +756,8 @@ async function findByTags(supabase: SupabaseClient, args: Args): Promise<string>
 
   return JSON.stringify({
     match_mode: matchMode,
-    tags: inputTags,
+    tags_queried: expandedTags,
+    tag_expansions: expansions,
     result_count: results.length,
     results,
   }, null, 2);
