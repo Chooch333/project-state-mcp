@@ -1243,7 +1243,7 @@ async function getDecisionChain(supabase: SupabaseClient, args: Args): Promise<s
   // Anchor: fetch the starting decision
   const { data: anchor, error: anchorErr } = await supabase
     .from('decisions')
-    .select('id, project_id, title, rationale, alternatives_considered, change_reason, tags, source, supersedes, decided_at')
+    .select('id, project_id, title, rationale, alternatives_considered, change_reason, provenance, tags, source, supersedes, decided_at')
     .eq('id', args.decision_id)
     .maybeSingle();
   if (anchorErr) throw new Error(anchorErr.message);
@@ -1258,7 +1258,7 @@ async function getDecisionChain(supabase: SupabaseClient, args: Args): Promise<s
     visited.add(cursor.supersedes);
     const { data: parent, error } = await supabase
       .from('decisions')
-      .select('id, project_id, title, rationale, alternatives_considered, change_reason, tags, source, supersedes, decided_at')
+      .select('id, project_id, title, rationale, alternatives_considered, change_reason, provenance, tags, source, supersedes, decided_at')
       .eq('id', cursor.supersedes)
       .maybeSingle();
     if (error) throw new Error(`Chain walk backward: ${error.message}`);
@@ -1274,7 +1274,7 @@ async function getDecisionChain(supabase: SupabaseClient, args: Args): Promise<s
   while (true) {
     const { data: child, error } = await supabase
       .from('decisions')
-      .select('id, project_id, title, rationale, alternatives_considered, change_reason, tags, source, supersedes, decided_at')
+      .select('id, project_id, title, rationale, alternatives_considered, change_reason, provenance, tags, source, supersedes, decided_at')
       .eq('supersedes', forwardCursor.id)
       .maybeSingle();
     if (error) throw new Error(`Chain walk forward: ${error.message}`);
