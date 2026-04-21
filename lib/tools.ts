@@ -253,6 +253,19 @@ export const TOOLS = [
     },
   },
   {
+    name: 'update_provenance',
+    description: 'Fill in or amend the provenance on a decision or plan. Use when provenance was skipped at write time, the user clarifies what was consulted, or a better articulation emerges. Works on both decisions and plans — pass entity_type to specify.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        entity_type: { type: 'string', enum: ['decision', 'plan'] },
+        entity_id: { type: 'string' },
+        provenance: { type: 'string' },
+      },
+      required: ['entity_type', 'entity_id', 'provenance'],
+    },
+  },
+  {
     name: 'add_assumption',
     description: 'Record an active assumption with alternatives.',
     inputSchema: {
