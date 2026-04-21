@@ -1139,6 +1139,52 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
 }
 
 // ─────────────────────────────────────────────────────────
+// Update the provenance on a decision or plan.
+// Use when provenance was skipped at write time, or when a better
+// articulation of "how we got here" emerges later.
+// ─────────────────────────────────────────────────────────
+
+async function updateProvenance(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (!args.entity_id) throw new Error('entity_id is required');
+  if (!args.entity_type || (args.entity_type !== 'decision' && args.entity_type !== 'plan')) {
+    throw new Error('entity_type must be "decision" or "plan"');
+  }
+  if (typeof args.provenance !== 'string' || args.provenance.trim().length === 0) {
+    throw new Error('provenance must be a non-empty string');
+  }
+
+  const table = args.entity_type === 'decision' ? 'decisions' : 'plans';
+  const selectFields = args.entity_type === 'decision'
+    ? 'id, title, provenance'
+    : 'id, title, provenance';
+
+  // Fetch existing to preserve previous value in response
+  const { data: existing, error: fetchErr } = await supabase
+    .from(table)
+    .select(selectFields)
+    .eq('id', args.entity_id)
+    .maybeSingle();
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (!existing) throw new Error(`${args.entity_type} not found: ${args.entity_id}`);
+
+  const previousValue = (existing as any).provenance;
+  const { data, error } = await supabase
+    .from(table)
+    .update({ provenance: args.provenance.trim() })
+    .eq('id', args.entity_id)
+    .select(selectFields)
+    .single();
+  if (error) throw new Error(error.message);
+
+  return JSON.stringify({
+    ...data,
+    entity_type: args.entity_type,
+    previous_value: previousValue,
+    updated: true,
+  }, null, 2);
+}
+
+// ─────────────────────────────────────────────────────────
 // Update the change_reason on a supersession.
 // Use when change_reason was skipped at write time, or when a better
 // articulation emerges later. Requires that the decision has a supersedes
