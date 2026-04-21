@@ -225,7 +225,7 @@ export const TOOLS = [
   },
   {
     name: 'supersede_decision',
-    description: 'Replace an existing decision with a new one. The old decision remains in history. Always try to supply change_reason (why moving from old to new) and provenance (what you consulted). Both are preferred; if unclear, ASK the user rather than fabricating a placeholder. If left empty the response will include warnings you should relay to the user.',
+    description: 'Replace an existing decision with a new one. The old decision remains in history. Always try to supply change_reason (why moving from old to new) and provenance (what you consulted). Both are preferred; if unclear, ASK the user rather than fabricating a placeholder. If left empty the response will include warnings you should relay to the user. Pass optional decided_at when seeding a historical supersession.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -237,6 +237,7 @@ export const TOOLS = [
         provenance: { type: 'string', description: 'Show your work: what you consulted. Ask the user if unclear.' },
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
+        decided_at: { type: 'string', description: 'Optional ISO 8601 timestamp override. Defaults to now().' },
       },
       required: ['old_decision_id', 'new_title', 'new_rationale', 'source'],
     },
