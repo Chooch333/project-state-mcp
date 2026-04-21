@@ -581,7 +581,7 @@ async function getProjectState(supabase: SupabaseClient, args: Args): Promise<st
   const lessonsLimit = args.recent_lessons_limit ?? 10;
 
   const [decisions, assumptions, blockers, nextMoves, snapshot, notes, lessons, project] = await Promise.all([
-    supabase.from('decisions').select('id, title, rationale, alternatives_considered, tags, decided_at, source').eq('project_id', projectId).is('supersedes', null).order('decided_at', { ascending: false }),
+    supabase.from('decisions').select('id, title, rationale, alternatives_considered, change_reason, supersedes, tags, decided_at, source').eq('project_id', projectId).is('supersedes', null).order('decided_at', { ascending: false }),
     supabase.from('assumptions').select('id, statement, alternatives, tags, source, created_at').eq('project_id', projectId).eq('status', 'active').order('created_at', { ascending: false }),
     supabase.from('blockers').select('id, question, context, tags, source, created_at').eq('project_id', projectId).is('resolved_at', null).order('created_at', { ascending: false }),
     supabase.from('next_moves').select('id, description, priority, estimated_effort, tags, source, created_at').eq('project_id', projectId).is('completed_at', null).order('created_at', { ascending: false }),
