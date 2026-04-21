@@ -1,5 +1,7 @@
-// MCP JSON-RPC endpoint. Matches the same protocol Charles's github-mcp-server uses.
-// Vercel routes POSTs to /api/mcp here.
+// MCP JSON-RPC endpoint.
+// Accepts auth via either:
+//   - Authorization: Bearer <MCP_SHARED_SECRET>  (preferred, used by Claude Code, curl, etc.)
+//   - ?token=<MCP_SHARED_SECRET> query string     (fallback for clients that can't send custom headers, e.g. claude.ai custom connectors)
 
 import type { IncomingMessage, ServerResponse } from 'http';
 import { TOOLS } from '../lib/tools';
@@ -27,12 +29,27 @@ function err(id: JsonRpcRequest['id'], code: number, message: string, data?: any
   return { jsonrpc: '2.0', id: id ?? null, error: { code, message, data } };
 }
 
+function extractQueryToken(req: IncomingMessage): string | null {
+  try {
+    // req.url is a path + query like "/api/mcp?token=abc". Parse with URL using a dummy base.
+    const parsed = new URL(req.url ?? '', 'http://placeholder');
+    return parsed.searchParams.get('token');
+  } catch {
+    return null;
+  }
+}
+
 function checkAuth(req: IncomingMessage): boolean {
   const expected = process.env.MCP_SHARED_SECRET;
   if (!expected) return true; // if no secret configured, allow — useful for local dev
+
   const auth = req.headers['authorization'];
-  if (!auth) return false;
-  return auth === `Bearer ${expected}`;
+  if (auth && auth === `Bearer ${expected}`) return true;
+
+  const queryToken = extractQueryToken(req);
+  if (queryToken && queryToken === expected) return true;
+
+  return false;
 }
 
 async function readBody(req: IncomingMessage): Promise<any> {
