@@ -196,7 +196,7 @@ async function getProjectDashboard(supabase: SupabaseClient, args: Args): Promis
   };
 
   const scale = {
-    active_decisions: decisionsCt.count ?? 0,
+    active_decisions: activeDecisionsCount,
     active_assumptions: assumptionsCt.count ?? 0,
     open_blockers: blockersCt.count ?? 0,
     open_next_moves: nextMovesCt.count ?? 0,
