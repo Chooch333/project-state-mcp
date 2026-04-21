@@ -63,6 +63,8 @@ export async function callTool(name: string, args: Args): Promise<string> {
       return getDecisionChain(supabase, args);
     case 'update_change_reason':
       return updateChangeReason(supabase, args);
+    case 'update_provenance':
+      return updateProvenance(supabase, args);
     case 'add_assumption':
       return addAssumption(supabase, args);
     case 'update_assumption':
