@@ -569,7 +569,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
 
   return JSON.stringify({
     window: { since: sinceIso, until: untilIso },
-    scope: args.project_slug ? { project_slug: args.project_slug } : { project_slug: 'ALL' },
+    scope: args.project_slug ? { project_slug: args.project_slug } : { all_projects: true },
     filters: {
       entity_types: entityTypes ?? null,
       event_types: eventTypes ?? null,
