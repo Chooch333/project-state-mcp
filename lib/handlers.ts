@@ -15,6 +15,27 @@ function normTags(tags: any): string[] {
   return normalizeTags(tags);
 }
 
+/**
+ * Parse an optional ISO 8601 timestamp override.
+ * Returns:
+ *   - null if the arg is undefined/null/empty (caller should use DB default now())
+ *   - a valid ISO string if the arg parses
+ * Throws on malformed input — we prefer an explicit error to a silent default.
+ */
+function parseOverrideTimestamp(raw: unknown, fieldName: string): string | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'string') {
+    throw new Error(`${fieldName} must be an ISO 8601 string if provided (got ${typeof raw})`);
+  }
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  const d = new Date(trimmed);
+  if (isNaN(d.getTime())) {
+    throw new Error(`${fieldName} is not a valid ISO 8601 timestamp: "${raw}"`);
+  }
+  return d.toISOString();
+}
+
 // Table names per entity type (single source of truth)
 const ENTITY_TABLE: Record<string, string> = {
   decision: 'decisions',
