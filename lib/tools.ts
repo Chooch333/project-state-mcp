@@ -433,6 +433,18 @@ export const TOOLS = [
     },
   },
   {
+    name: 'list_plans',
+    description: 'List all plans for a project, ordered newest-first. Returns plan metadata (title, status, timestamps) without content by default; pass include_content=true for full bodies.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_slug: { type: 'string' },
+        include_content: { type: 'boolean', description: 'Include the full content of every plan. Default false.' },
+      },
+      required: ['project_slug'],
+    },
+  },
+  {
     name: 'write_status_snapshot',
     description: 'Write a brief narrative summary of where the project is right now. Pass optional observed_at to describe a prior moment when seeding from old chats.',
     inputSchema: {
