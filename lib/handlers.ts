@@ -29,6 +29,8 @@ export async function callTool(name: string, args: Args): Promise<string> {
   const supabase = getSupabase();
 
   switch (name) {
+    case 'get_project_dashboard':
+      return getProjectDashboard(supabase, args);
     case 'list_projects':
       return listProjects(supabase, args);
     case 'get_project_state':
@@ -76,6 +78,145 @@ export async function callTool(name: string, args: Args): Promise<string> {
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
+}
+
+// ─────────────────────────────────────────────────────────
+// AT-A-GLANCE DASHBOARD
+// Fixed-shape summary for natural-language queries like
+// "how is X going" or "what's up with X".
+// ─────────────────────────────────────────────────────────
+
+async function getProjectDashboard(supabase: SupabaseClient, args: Args): Promise<string> {
+  const projectId = await resolveProjectId(supabase, args.project_slug);
+
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [
+    project,
+    snapshot,
+    allOpenBlockers,
+    urgentMoves,
+    otherOpenMoves,
+    recentDecisions,
+    recentNotes,
+    recentLessons,
+    recentBlockersRaised,
+    recentBlockersResolved,
+    recentMovesCompleted,
+    scaleCounts,
+  ] = await Promise.all([
+    supabase.from('projects').select('name, description, repo_url, status').eq('id', projectId).maybeSingle(),
+    supabase.from('status_snapshots').select('narrative, created_at, source').eq('project_id', projectId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('blockers').select('id, question, context, tags, created_at').eq('project_id', projectId).is('resolved_at', null).order('created_at', { ascending: false }),
+    supabase.from('next_moves').select('id, description, priority, estimated_effort, tags, created_at').eq('project_id', projectId).is('completed_at', null).eq('priority', 'urgent').order('created_at', { ascending: false }),
+    supabase.from('next_moves').select('id, description, priority, estimated_effort, tags, created_at').eq('project_id', projectId).is('completed_at', null).neq('priority', 'urgent').order('created_at', { ascending: false }).limit(3),
+    supabase.from('decisions').select('id, title, decided_at').eq('project_id', projectId).is('supersedes', null).gte('decided_at', sevenDaysAgo).order('decided_at', { ascending: false }),
+    supabase.from('notes').select('id, content, topic, tags, created_at').eq('project_id', projectId).gte('created_at', sevenDaysAgo).order('created_at', { ascending: false }).limit(10),
+    supabase.from('lessons').select('id, situation, lesson, severity, created_at').eq('project_id', projectId).gte('created_at', sevenDaysAgo).order('created_at', { ascending: false }),
+    supabase.from('blockers').select('id, question, created_at').eq('project_id', projectId).gte('created_at', sevenDaysAgo).order('created_at', { ascending: false }),
+    supabase.from('blockers').select('id, question, resolved_at').eq('project_id', projectId).not('resolved_at', 'is', null).gte('resolved_at', sevenDaysAgo).order('resolved_at', { ascending: false }),
+    supabase.from('next_moves').select('id, description, completed_at').eq('project_id', projectId).not('completed_at', 'is', null).gte('completed_at', sevenDaysAgo).order('completed_at', { ascending: false }),
+    // Scale counts — total active entities
+    Promise.all([
+      supabase.from('decisions').select('id', { count: 'exact', head: true }).eq('project_id', projectId).is('supersedes', null),
+      supabase.from('assumptions').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('status', 'active'),
+      supabase.from('blockers').select('id', { count: 'exact', head: true }).eq('project_id', projectId).is('resolved_at', null),
+      supabase.from('next_moves').select('id', { count: 'exact', head: true }).eq('project_id', projectId).is('completed_at', null),
+      supabase.from('notes').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
+      supabase.from('lessons').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
+      supabase.from('plans').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
+    ]),
+  ]);
+
+  if (!project.data) throw new Error(`Project not found: ${args.project_slug}`);
+
+  const [decisionsCt, assumptionsCt, blockersCt, nextMovesCt, notesCt, lessonsCt, plansCt] = scaleCounts;
+
+  // Synthesize a one-line status if no snapshot exists
+  const statusLine =
+    snapshot.data?.narrative ??
+    `No status snapshot yet. Project has ${decisionsCt.count ?? 0} active decisions and ${nextMovesCt.count ?? 0} open next moves.`;
+
+  const statusAge = snapshot.data?.created_at
+    ? daysAgo(new Date(snapshot.data.created_at), now)
+    : null;
+
+  // Top attention items: open urgent next moves + all open blockers (blockers always count as attention)
+  const attention = {
+    open_blockers: (allOpenBlockers.data ?? []).map((b) => ({
+      id: b.id,
+      question: b.question,
+      context: b.context,
+      tags: b.tags ?? [],
+      days_open: daysAgo(new Date(b.created_at), now),
+    })),
+    urgent_next_moves: (urgentMoves.data ?? []).map((m) => ({
+      id: m.id,
+      description: m.description,
+      estimated_effort: m.estimated_effort,
+      tags: m.tags ?? [],
+      days_old: daysAgo(new Date(m.created_at), now),
+    })),
+    other_open_next_moves_sample: (otherOpenMoves.data ?? []).map((m) => ({
+      id: m.id,
+      description: m.description,
+      priority: m.priority,
+    })),
+  };
+
+  const last_7_days = {
+    window: `${sevenDaysAgo} → ${now.toISOString()}`,
+    counts: {
+      decisions_added: recentDecisions.data?.length ?? 0,
+      notes_added: recentNotes.data?.length ?? 0,
+      lessons_added: recentLessons.data?.length ?? 0,
+      blockers_raised: recentBlockersRaised.data?.length ?? 0,
+      blockers_resolved: recentBlockersResolved.data?.length ?? 0,
+      next_moves_completed: recentMovesCompleted.data?.length ?? 0,
+    },
+    decisions: recentDecisions.data ?? [],
+    notes_sample: recentNotes.data ?? [],
+    lessons: recentLessons.data ?? [],
+    blockers_raised: recentBlockersRaised.data ?? [],
+    blockers_resolved: recentBlockersResolved.data ?? [],
+    next_moves_completed: recentMovesCompleted.data ?? [],
+  };
+
+  const scale = {
+    active_decisions: decisionsCt.count ?? 0,
+    active_assumptions: assumptionsCt.count ?? 0,
+    open_blockers: blockersCt.count ?? 0,
+    open_next_moves: nextMovesCt.count ?? 0,
+    notes_total: notesCt.count ?? 0,
+    lessons_total: lessonsCt.count ?? 0,
+    plans_total: plansCt.count ?? 0,
+  };
+
+  const dashboard = {
+    project: {
+      slug: args.project_slug,
+      name: project.data.name,
+      description: project.data.description,
+      status: project.data.status,
+      repo_url: project.data.repo_url,
+    },
+    status: {
+      line: statusLine,
+      days_old: statusAge,
+      source: snapshot.data?.source ?? null,
+    },
+    attention,
+    last_7_days,
+    scale,
+    rendered_at: now.toISOString(),
+  };
+
+  return JSON.stringify(dashboard, null, 2);
+}
+
+function daysAgo(then: Date, now: Date): number {
+  return Math.floor((now.getTime() - then.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 // ─────────────────────────────────────────────────────────
@@ -240,9 +381,6 @@ async function findByTags(supabase: SupabaseClient, args: Args): Promise<string>
 
     let q = supabase.from(table).select(`${selectFields}, tags, created_at`);
     if (projectId) q = q.eq('project_id', projectId);
-    // Postgres array operators via Supabase:
-    //   @> (contains) for match_mode=all  — row.tags contains ALL inputTags
-    //   && (overlaps) for match_mode=any  — row.tags overlaps with inputTags
     if (matchMode === 'all') {
       q = q.contains('tags', inputTags);
     } else {
@@ -283,7 +421,6 @@ async function listTags(supabase: SupabaseClient, args: Args): Promise<string> {
     projectId = await resolveProjectId(supabase, args.project_slug);
   }
 
-  // For each entity table, pull tags arrays and aggregate.
   const tables = Object.values(ENTITY_TABLE);
   const tagCounts = new Map<string, number>();
 
@@ -318,7 +455,6 @@ async function addTagsToRow(supabase: SupabaseClient, args: Args): Promise<strin
   if (!table) throw new Error(`Unknown entity_type: ${entityType}`);
   if (newTags.length === 0) throw new Error('tags array must contain at least one non-empty tag');
 
-  // Fetch existing tags, merge, dedupe, update
   const { data: row, error: fetchErr } = await supabase.from(table).select('tags').eq('id', id).maybeSingle();
   if (fetchErr) throw new Error(fetchErr.message);
   if (!row) throw new Error(`${entityType} not found: ${id}`);
@@ -408,14 +544,12 @@ async function addNote(supabase: SupabaseClient, args: Args): Promise<string> {
 async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string> {
   const { note_id, target_entity, source } = args;
 
-  // Fetch the note (including tags and topic for carryover)
   const { data: note, error: noteErr } = await supabase.from('notes').select('project_id, tags, topic, promoted_to_entity, promoted_to_id').eq('id', note_id).maybeSingle();
   if (noteErr) throw new Error(noteErr.message);
   if (!note) throw new Error(`Note not found: ${note_id}`);
   if (note.promoted_to_entity) throw new Error(`Note already promoted to ${note.promoted_to_entity}:${note.promoted_to_id}`);
 
   const projectId = note.project_id;
-  // Default: carry over note's tags (including topic as tag if present) unless caller supplied tags
   const incoming = normTags(args.tags);
   const carryoverTags = note.tags ?? [];
   const topicAsTag = note.topic ? [note.topic.toLowerCase()] : [];
