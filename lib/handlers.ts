@@ -1013,7 +1013,7 @@ async function addLesson(supabase: SupabaseClient, args: Args): Promise<string> 
 async function logDecision(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.decision(args.title, args.rationale, args.alternatives_considered));
-  const tags = normTags(args.tags);
+  const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
   const { data, error } = await supabase.from('decisions').insert({
     project_id: projectId,
     title: args.title,
@@ -1024,7 +1024,7 @@ async function logDecision(supabase: SupabaseClient, args: Args): Promise<string
     embedding: toPgVector(embedding),
   }).select('id, title, rationale, alternatives_considered, tags, source, decided_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify(data, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
 
 async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<string> {
