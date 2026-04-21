@@ -366,7 +366,7 @@ export const TOOLS = [
   },
   {
     name: 'write_plan',
-    description: 'Store a build plan document. Always try to supply provenance — what you consulted to produce this plan.',
+    description: 'Store a build plan document. Always try to supply provenance — what you consulted to produce this plan. Pass optional created_at to backdate. When backdating, revision 1 is also backdated to keep history consistent.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -376,6 +376,7 @@ export const TOOLS = [
         provenance: { type: 'string', description: 'Show your work. Strongly preferred.' },
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
+        created_at: { type: 'string', description: 'Optional ISO 8601 timestamp override. Defaults to now().' },
       },
       required: ['project_slug', 'title', 'content', 'source'],
     },
