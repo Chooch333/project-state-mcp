@@ -1366,16 +1366,29 @@ async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> 
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.plan(args.title, args.content));
   const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
+
+  const provenance = (typeof args.provenance === 'string' && args.provenance.trim().length > 0)
+    ? args.provenance.trim()
+    : null;
+
   const { data, error } = await supabase.from('plans').insert({
     project_id: projectId,
     title: args.title,
     content: args.content,
+    provenance,
     tags,
     source: args.source,
     embedding: toPgVector(embedding),
-  }).select('id, title, status, tags, source, created_at').single();
+  }).select('id, title, status, provenance, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
+
+  const response: any = { ...data, tag_substitutions: substitutions };
+  if (!provenance) {
+    response.warning =
+      'provenance was not provided. The plan is recorded but "how we got here" is not captured. ' +
+      'If you can articulate what you consulted to produce this plan, call update_provenance with plan_id ' + data.id + ' to fill it in.';
+  }
+  return JSON.stringify(response, null, 2);
 }
 
 async function updatePlanStatus(supabase: SupabaseClient, args: Args): Promise<string> {
