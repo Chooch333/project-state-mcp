@@ -894,10 +894,18 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
   if (note.promoted_to_entity) throw new Error(`Note already promoted to ${note.promoted_to_entity}:${note.promoted_to_id}`);
 
   const projectId = note.project_id;
-  const incoming = normTags(args.tags);
-  const carryoverTags = note.tags ?? [];
-  const topicAsTag = note.topic ? [note.topic.toLowerCase()] : [];
-  const tags = incoming.length > 0 ? incoming : Array.from(new Set([...carryoverTags, ...topicAsTag]));
+  // Tags: if caller passes tags, normalize and reconcile them. Otherwise carry over note's tags + topic.
+  let tags: string[];
+  let substitutions: Array<{ from: string; to: string; score: number }> = [];
+  if (args.tags && Array.isArray(args.tags) && args.tags.length > 0) {
+    const result = await normalizeAndReconcile(supabase, args.tags, projectId);
+    tags = result.tags;
+    substitutions = result.substitutions;
+  } else {
+    const carryoverTags = note.tags ?? [];
+    const topicAsTag = note.topic ? [note.topic.toLowerCase()] : [];
+    tags = Array.from(new Set([...carryoverTags, ...topicAsTag]));
+  }
 
   let newRow: any;
 
