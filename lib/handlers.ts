@@ -1060,12 +1060,14 @@ async function logDecision(supabase: SupabaseClient, args: Args): Promise<string
 }
 
 async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<string> {
-  // Enforce change_reason. This is separate from new_rationale: rationale justifies
-  // the new decision on its own terms; change_reason explains why we moved from
-  // the old one to this one. Future readers need the latter to follow the reasoning.
-  if (!args.change_reason || typeof args.change_reason !== 'string' || args.change_reason.trim().length === 0) {
-    throw new Error('change_reason is required. Explain why we are moving from the old decision to this new one — what changed, what became clear, why now. This creates the breadcrumb trail for future readers.');
-  }
+  // change_reason is strongly preferred but not strictly required.
+  // If missing, we store null and return a warning — the supersession still succeeds.
+  // This prevents a mid-flow block when Claude can't yet articulate the reason,
+  // while keeping missing reasons explicitly visible (as null) rather than disguised
+  // as a meaningless default string.
+  const providedReason = (typeof args.change_reason === 'string' && args.change_reason.trim().length > 0)
+    ? args.change_reason.trim()
+    : null;
 
   const { data: oldRow, error: oldErr } = await supabase.from('decisions').select('project_id, tags').eq('id', args.old_decision_id).maybeSingle();
   if (oldErr) throw new Error(oldErr.message);
@@ -1089,14 +1091,21 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
     title: args.new_title,
     rationale: args.new_rationale,
     alternatives_considered: args.new_alternatives_considered ?? null,
-    change_reason: args.change_reason.trim(),
+    change_reason: providedReason,
     tags,
     source: args.source,
     supersedes: args.old_decision_id,
     embedding: toPgVector(embedding),
   }).select('id, title, rationale, change_reason, tags, source, supersedes, decided_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
+
+  const response: any = { ...data, tag_substitutions: substitutions };
+  if (!providedReason) {
+    response.warning =
+      'change_reason was not provided. The supersession succeeded but the reasoning breadcrumb is missing. ' +
+      'Ask the user why the change was made and call update_change_reason with decision_id ' + data.id + ' to fill it in.';
+  }
+  return JSON.stringify(response, null, 2);
 }
 
 // ─────────────────────────────────────────────────────────
