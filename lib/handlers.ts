@@ -1740,6 +1740,30 @@ async function getPlan(supabase: SupabaseClient, args: Args): Promise<string> {
   throw new Error('Must provide either plan_id or project_slug.');
 }
 
+async function listPlans(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (!args.project_slug) throw new Error('project_slug is required');
+  const projectId = await resolveProjectId(supabase, args.project_slug);
+
+  const includeContent = args.include_content === true;
+  const selectFields = includeContent
+    ? 'id, title, status, content, provenance, tags, source, current_revision, created_at, blessed_at, completed_at'
+    : 'id, title, status, provenance, tags, source, current_revision, created_at, blessed_at, completed_at';
+
+  const { data, error } = await supabase
+    .from('plans')
+    .select(selectFields)
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+
+  return JSON.stringify({
+    project_slug: args.project_slug,
+    count: data?.length ?? 0,
+    content_included: includeContent,
+    plans: data ?? [],
+  }, null, 2);
+}
+
 // ─────────────────────────────────────────────────────────
 // Status snapshots
 // ─────────────────────────────────────────────────────────
