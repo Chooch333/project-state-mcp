@@ -145,7 +145,7 @@ export const TOOLS = [
   },
   {
     name: 'add_note',
-    description: 'Low-friction capture. Use for anything worth remembering that does not yet fit a structured entity.',
+    description: 'Low-friction capture. Use for anything worth remembering that does not yet fit a structured entity. Pass optional created_at (ISO 8601) to backdate the note — useful when seeding from old conversations.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -154,6 +154,7 @@ export const TOOLS = [
         topic: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
+        created_at: { type: 'string', description: 'Optional ISO 8601 timestamp override. Use to backdate when seeding historical notes from old chats. Defaults to now() if omitted.' },
       },
       required: ['project_slug', 'content', 'source'],
     },
