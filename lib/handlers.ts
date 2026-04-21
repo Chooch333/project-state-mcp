@@ -1514,6 +1514,135 @@ async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> 
   return JSON.stringify(response, null, 2);
 }
 
+// ─────────────────────────────────────────────────────────
+// Plan content updates — creates a new revision snapshot every time.
+// Each call:
+//   1. Loads the current plan's title/content/current_revision
+//   2. Writes the CURRENT state (pre-update) into plan_revisions as revision N+1
+//      (wait — see note below; we actually snapshot the NEW content as the new current revision)
+//   3. Updates the plan row with the new title/content and increments current_revision
+//   4. Regenerates the plan's embedding
+//
+// Clarification on revision numbering:
+//   Revision N represents the Nth "version" of the plan's content. write_plan seeds revision 1.
+//   update_plan_content moves the plan from revision N to revision N+1:
+//     - The plan row is updated to the new content
+//     - A new plan_revisions row is inserted with revision_number = N+1 capturing the new state
+//   This way plan_revisions is a complete history: every revision that ever existed is there,
+//   including the current one. Walking "plan at version N" = SELECT from plan_revisions WHERE revision_number = N.
+// ─────────────────────────────────────────────────────────
+
+async function updatePlanContent(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (!args.plan_id) throw new Error('plan_id is required');
+  if (typeof args.new_content !== 'string' || args.new_content.trim().length === 0) {
+    throw new Error('new_content is required and must be non-empty');
+  }
+
+  // change_reason follows the same soft-requirement pattern used for supersede/provenance
+  const changeReason = (typeof args.change_reason === 'string' && args.change_reason.trim().length > 0)
+    ? args.change_reason.trim()
+    : null;
+
+  // Load current plan to get title and current revision number
+  const { data: plan, error: fetchErr } = await supabase
+    .from('plans')
+    .select('id, title, content, current_revision, source')
+    .eq('id', args.plan_id)
+    .maybeSingle();
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (!plan) throw new Error(`Plan not found: ${args.plan_id}`);
+
+  const newTitle = (typeof args.new_title === 'string' && args.new_title.trim().length > 0)
+    ? args.new_title.trim()
+    : plan.title;
+  const newRevisionNumber = plan.current_revision + 1;
+  const source = args.source ?? plan.source;
+
+  // Regenerate embedding from new content so search reflects current state
+  const embedding = await embed(composeEmbeddingText.plan(newTitle, args.new_content));
+
+  // Update the plan row
+  const { data: updated, error: updateErr } = await supabase
+    .from('plans')
+    .update({
+      title: newTitle,
+      content: args.new_content,
+      current_revision: newRevisionNumber,
+      embedding: toPgVector(embedding),
+    })
+    .eq('id', args.plan_id)
+    .select('id, title, status, current_revision, source, created_at')
+    .single();
+  if (updateErr) throw new Error(updateErr.message);
+
+  // Insert the new revision snapshot. Non-fatal if this fails (plan is already updated).
+  const { error: revErr } = await supabase.from('plan_revisions').insert({
+    plan_id: args.plan_id,
+    revision_number: newRevisionNumber,
+    title: newTitle,
+    content: args.new_content,
+    change_reason: changeReason,
+    source,
+  });
+  if (revErr) {
+    console.error(`Failed to insert revision ${newRevisionNumber} for plan ${args.plan_id}:`, revErr.message);
+  }
+
+  const response: any = {
+    ...updated,
+    previous_revision: plan.current_revision,
+  };
+  if (!changeReason) {
+    response.warning =
+      'change_reason was not provided. The edit succeeded but the reason for the change is not captured. ' +
+      'Ask the user what prompted this revision and record it — future readers will need to know why the plan evolved.';
+  }
+  return JSON.stringify(response, null, 2);
+}
+
+// ─────────────────────────────────────────────────────────
+// Get all revisions for a plan — walk the evolution.
+// ─────────────────────────────────────────────────────────
+
+async function getPlanRevisions(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (!args.plan_id) throw new Error('plan_id is required');
+
+  // Fetch the plan for context (title, current_revision)
+  const { data: plan, error: planErr } = await supabase
+    .from('plans')
+    .select('id, title, status, current_revision, created_at')
+    .eq('id', args.plan_id)
+    .maybeSingle();
+  if (planErr) throw new Error(planErr.message);
+  if (!plan) throw new Error(`Plan not found: ${args.plan_id}`);
+
+  // Order newest → oldest so the caller sees current state first
+  const includeContent = args.include_content === true;
+  const selectFields = includeContent
+    ? 'id, plan_id, revision_number, title, content, change_reason, source, created_at'
+    : 'id, plan_id, revision_number, title, change_reason, source, created_at';
+
+  const { data: revisions, error: revErr } = await supabase
+    .from('plan_revisions')
+    .select(selectFields)
+    .eq('plan_id', args.plan_id)
+    .order('revision_number', { ascending: false });
+  if (revErr) throw new Error(revErr.message);
+
+  return JSON.stringify({
+    plan: {
+      id: plan.id,
+      title: plan.title,
+      status: plan.status,
+      current_revision: plan.current_revision,
+      created_at: plan.created_at,
+    },
+    revision_count: revisions?.length ?? 0,
+    content_included: includeContent,
+    revisions: revisions ?? [],
+  }, null, 2);
+}
+
 async function updatePlanStatus(supabase: SupabaseClient, args: Args): Promise<string> {
   const update: any = { status: args.new_status };
   if (args.new_status === 'blessed') update.blessed_at = new Date().toISOString();
