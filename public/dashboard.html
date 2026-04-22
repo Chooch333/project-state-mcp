@@ -675,7 +675,11 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       const el = document.getElementById('overview-content');
       el.innerHTML = '<div class="loading">Loading...</div>';
       try {
-        const d = await callMcp('get_project_dashboard', { project_slug: currentProject });
+        // Two parallel fetches: dashboard summary + full state (for Design Choices card)
+        const [d, state] = await Promise.all([
+          callMcp('get_project_dashboard', { project_slug: currentProject }),
+          callMcp('get_project_state', { project_slug: currentProject }),
+        ]);
 
         let html = '';
 
@@ -690,7 +694,7 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
         }
         html += '</div>';
 
-        // Status card
+        // Status card with narrative + 2-column Key Facts
         html += '<div class="card">';
         html += '<h2>Status</h2>';
         html += '<div class="status-line">' + escapeHtml(d.status.line) + '</div>';
@@ -698,9 +702,25 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
         if (d.status.days_old !== null && d.status.days_old !== undefined) ageBits.push(d.status.days_old + ' days old');
         if (d.status.source) ageBits.push('via ' + escapeHtml(d.status.source));
         if (ageBits.length) html += '<div class="status-meta">' + ageBits.join(' · ') + '</div>';
+
+        // Key Facts — project metadata in 2 columns
+        const facts = [];
+        if (d.project.status) facts.push('<strong>Project status:</strong> ' + escapeHtml(d.project.status));
+        if (d.project.supabase_project_id) facts.push('<strong>Supabase project:</strong> <code>' + escapeHtml(d.project.supabase_project_id) + '</code>');
+        if (d.project.vercel_project_id) facts.push('<strong>Vercel project:</strong> <code>' + escapeHtml(d.project.vercel_project_id) + '</code>');
+        facts.push('<strong>Active decisions:</strong> ' + d.scale.active_decisions);
+        facts.push('<strong>Open next moves:</strong> ' + d.scale.open_next_moves);
+        facts.push('<strong>Open blockers:</strong> ' + d.scale.open_blockers);
+        facts.push('<strong>Total plans:</strong> ' + d.scale.plans_total);
+        facts.push('<strong>Total notes:</strong> ' + d.scale.notes_total);
+
+        html += '<h3 class="status-subhead">Key facts</h3>';
+        html += '<ul class="key-facts">';
+        facts.forEach(f => { html += '<li>' + f + '</li>'; });
+        html += '</ul>';
         html += '</div>';
 
-        // Attention row: blockers + urgent next moves side-by-side
+        // Attention row: blockers + urgent next moves side-by-side (now as bulleted lists)
         html += '<div class="row-grid">';
 
         // Open blockers
@@ -709,16 +729,18 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
         if (d.attention.open_blockers.length === 0) {
           html += '<div class="empty">Nothing blocked right now.</div>';
         } else {
+          html += '<ul class="bullet-list">';
           d.attention.open_blockers.forEach(b => {
-            html += '<div class="item">';
+            html += '<li>';
             html += '<div class="item-title">' + escapeHtml(b.question) + '</div>';
             if (b.context) html += '<div class="item-body">' + escapeHtml(b.context) + '</div>';
             html += '<div class="item-meta">';
             html += '<span class="days-open ' + daysClass(b.days_open) + '">Open ' + b.days_open + ' days</span>';
             if (b.tags && b.tags.length) html += formatTags(b.tags);
             html += '</div>';
-            html += '</div>';
+            html += '</li>';
           });
+          html += '</ul>';
         }
         html += '</div>';
 
@@ -728,8 +750,9 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
         if (d.attention.urgent_next_moves.length === 0) {
           html += '<div class="empty">Nothing marked urgent.</div>';
         } else {
+          html += '<ul class="bullet-list">';
           d.attention.urgent_next_moves.forEach(m => {
-            html += '<div class="item">';
+            html += '<li>';
             html += '<div class="item-title">' + escapeHtml(m.description) + '</div>';
             html += '<div class="item-meta">';
             html += '<span class="badge badge-urgent">urgent</span>';
@@ -737,26 +760,48 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
             html += '<span class="days-open ' + daysClass(m.days_old) + '">' + m.days_old + ' days old</span>';
             if (m.tags && m.tags.length) html += formatTags(m.tags);
             html += '</div>';
-            html += '</div>';
+            html += '</li>';
           });
+          html += '</ul>';
         }
         html += '</div>';
 
         html += '</div>'; // end row-grid
 
+        // Design Choices — decisions tagged key-info (pulled from get_project_state)
+        const keyInfoDecisions = (state.active_decisions || []).filter(dec =>
+          Array.isArray(dec.tags) && dec.tags.includes('key-info')
+        );
+        if (keyInfoDecisions.length > 0) {
+          html += '<div class="card">';
+          html += '<h2>Design choices <span class="count">' + keyInfoDecisions.length + '</span></h2>';
+          keyInfoDecisions.forEach(dec => {
+            html += '<div class="design-choice">';
+            html += '<div class="design-choice-title">' + escapeHtml(dec.title) + '</div>';
+            html += '<div class="design-choice-why">' + escapeHtml(dec.rationale) + '</div>';
+            if (dec.tags && dec.tags.length) {
+              html += '<div class="design-choice-tags">' + formatTags(dec.tags.filter(t => t !== 'key-info')) + '</div>';
+            }
+            html += '</div>';
+          });
+          html += '</div>';
+        }
+
         // Other next moves
         if (d.attention.other_open_next_moves_sample && d.attention.other_open_next_moves_sample.length > 0) {
           html += '<div class="card">';
           html += '<h2>Other open next moves <span class="count">sample of ' + d.attention.other_open_next_moves_sample.length + '</span></h2>';
+          html += '<ul class="bullet-list">';
           d.attention.other_open_next_moves_sample.forEach(m => {
-            html += '<div class="item">';
+            html += '<li>';
             html += '<div class="item-title">' + escapeHtml(m.description) + '</div>';
             html += '<div class="item-meta">';
             const badge = m.priority === 'someday' ? 'badge-someday' : 'badge-normal';
             html += '<span class="badge ' + badge + '">' + escapeHtml(m.priority) + '</span>';
             html += '</div>';
-            html += '</div>';
+            html += '</li>';
           });
+          html += '</ul>';
           html += '</div>';
         }
 
