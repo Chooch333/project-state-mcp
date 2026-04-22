@@ -262,6 +262,93 @@
     }
     .days-open.urgent-days { color: var(--urgent); }
     .days-open.warn-days { color: var(--accent); }
+
+    /* Bulleted lists for blockers and urgent moves */
+    ul.bullet-list {
+      list-style: disc;
+      padding-left: 22px;
+      margin: 0;
+    }
+    ul.bullet-list > li {
+      padding: 10px 0;
+      margin: 0;
+    }
+    ul.bullet-list > li:first-child { padding-top: 2px; }
+    ul.bullet-list > li:last-child { padding-bottom: 2px; }
+    ul.bullet-list > li::marker { color: var(--text-subtle); }
+    ul.bullet-list .item-title {
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 3px;
+    }
+    ul.bullet-list .item-body {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 4px;
+    }
+
+    /* 2-column bulleted key facts under the Status narrative */
+    .status-subhead {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 18px 0 8px 0;
+    }
+    ul.key-facts {
+      columns: 2;
+      column-gap: 28px;
+      padding-left: 20px;
+      margin: 0;
+      list-style: disc;
+      font-size: 14px;
+    }
+    ul.key-facts > li {
+      break-inside: avoid;
+      padding: 3px 0;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    ul.key-facts > li::marker { color: var(--text-subtle); }
+    ul.key-facts strong { color: var(--text); font-weight: 500; }
+    ul.key-facts a { color: var(--info); text-decoration: none; }
+    ul.key-facts a:hover { text-decoration: underline; }
+    ul.key-facts code {
+      background: var(--bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      color: var(--text);
+    }
+    @media (max-width: 620px) { ul.key-facts { columns: 1; } }
+
+    /* Design Choices card — curated architectural commitments */
+    .design-choice {
+      padding: 11px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .design-choice:last-child { border-bottom: none; padding-bottom: 2px; }
+    .design-choice:first-child { padding-top: 2px; }
+    .design-choice-title {
+      font-weight: 500;
+      color: var(--text);
+      font-size: 14px;
+      margin-bottom: 5px;
+    }
+    .design-choice-why {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+    .design-choice-tags {
+      margin-top: 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
     .about-content {
       background: var(--surface);
       border: 1px solid var(--border);
