@@ -768,6 +768,39 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
 
         html += '</div>'; // end row-grid
 
+        // Full list of open next moves, sorted by priority (urgent -> normal -> someday).
+        // Positioned ABOVE Design Choices per dashboard-layout rule. Applies uniformly
+        // across all projects since this dashboard is a single static file.
+        const allOpenNextMoves = state.open_next_moves || [];
+        if (allOpenNextMoves.length > 0) {
+          const priorityOrder = { urgent: 0, normal: 1, someday: 2 };
+          const sortedMoves = [...allOpenNextMoves].sort((a, b) =>
+            (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3)
+          );
+          html += '<div class="card">';
+          html += '<h2>Open next moves <span class="count">' + sortedMoves.length + '</span></h2>';
+          html += '<ul class="bullet-list">';
+          sortedMoves.forEach(m => {
+            html += '<li>';
+            html += '<div class="item-title">' + escapeHtml(m.description) + '</div>';
+            html += '<div class="item-meta">';
+            const badge = m.priority === 'urgent' ? 'badge-urgent'
+                       : m.priority === 'someday' ? 'badge-someday'
+                       : 'badge-normal';
+            html += '<span class="badge ' + badge + '">' + escapeHtml(m.priority) + '</span>';
+            if (m.estimated_effort) html += '<span class="badge badge-muted">' + escapeHtml(m.estimated_effort) + '</span>';
+            if (m.created_at) {
+              const daysOld = Math.floor((Date.now() - new Date(m.created_at).getTime()) / (1000 * 60 * 60 * 24));
+              html += '<span class="days-open ' + daysClass(daysOld) + '">' + daysOld + ' days old</span>';
+            }
+            if (m.tags && m.tags.length) html += formatTags(m.tags);
+            html += '</div>';
+            html += '</li>';
+          });
+          html += '</ul>';
+          html += '</div>';
+        }
+
         // Design Choices — decisions tagged key-info (pulled from get_project_state)
         const keyInfoDecisions = (state.active_decisions || []).filter(dec =>
           Array.isArray(dec.tags) && dec.tags.includes('key-info')
@@ -784,24 +817,6 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
             }
             html += '</div>';
           });
-          html += '</div>';
-        }
-
-        // Other next moves
-        if (d.attention.other_open_next_moves_sample && d.attention.other_open_next_moves_sample.length > 0) {
-          html += '<div class="card">';
-          html += '<h2>Other open next moves <span class="count">sample of ' + d.attention.other_open_next_moves_sample.length + '</span></h2>';
-          html += '<ul class="bullet-list">';
-          d.attention.other_open_next_moves_sample.forEach(m => {
-            html += '<li>';
-            html += '<div class="item-title">' + escapeHtml(m.description) + '</div>';
-            html += '<div class="item-meta">';
-            const badge = m.priority === 'someday' ? 'badge-someday' : 'badge-normal';
-            html += '<span class="badge ' + badge + '">' + escapeHtml(m.priority) + '</span>';
-            html += '</div>';
-            html += '</li>';
-          });
-          html += '</ul>';
           html += '</div>';
         }
 
