@@ -82,7 +82,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-store');
 
-  // Auth intentionally removed for this one-shot run. Endpoint will be deleted after backfill completes.
+  if (!checkAuth(req)) {
+    res.statusCode = 401;
+    res.end(JSON.stringify({ error: 'Unauthorized' }));
+    return;
+  }
 
   if (!process.env.OPENAI_API_KEY) {
     res.statusCode = 500;
