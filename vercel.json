@@ -3,6 +3,9 @@
   "functions": {
     "api/mcp.ts": {
       "maxDuration": 30
+    },
+    "api/backfill.ts": {
+      "maxDuration": 60
     }
   }
 }
