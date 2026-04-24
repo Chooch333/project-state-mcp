@@ -550,7 +550,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
   // ── Lessons: added ──
   if (allowEntity('lesson')) {
     const { data: lessons, error } = await applyProjectFilter(
-      supabase.from('lessons').select('id, project_id, situation, lesson, severity, source, created_at')
+      supabase.from('lessons').select('id, display_id, project_id, situation, lesson, severity, source, created_at')
         .gte('created_at', sinceIso).lte('created_at', untilIso)
     );
     if (error) throw new Error(`lessons activity: ${error.message}`);
