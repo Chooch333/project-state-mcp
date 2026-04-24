@@ -1494,7 +1494,7 @@ async function addBlocker(supabase: SupabaseClient, args: Args): Promise<string>
   };
   if (raisedAt) insertRow.created_at = raisedAt;
   const { data, error } = await supabase.from('blockers').insert(insertRow)
-    .select('id, question, context, tags, source, created_at').single();
+    .select('id, display_id, question, context, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
