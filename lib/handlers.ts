@@ -337,7 +337,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
   // ── Decisions: added or superseded ──
   if (allowEntity('decision')) {
     const { data: decisions, error } = await applyProjectFilter(
-      supabase.from('decisions').select('id, project_id, title, rationale, source, supersedes, decided_at')
+      supabase.from('decisions').select('id, display_id, project_id, title, rationale, source, supersedes, decided_at')
         .gte('decided_at', sinceIso).lte('decided_at', untilIso)
     );
     if (error) throw new Error(`decisions activity: ${error.message}`);
