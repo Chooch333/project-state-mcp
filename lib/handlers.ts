@@ -1798,7 +1798,7 @@ async function writeStatusSnapshot(supabase: SupabaseClient, args: Args): Promis
   };
   if (observedAt) insertRow.created_at = observedAt;
   const { data, error } = await supabase.from('status_snapshots').insert(insertRow)
-    .select('id, narrative, tags, source, created_at').single();
+    .select('id, display_id, narrative, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
