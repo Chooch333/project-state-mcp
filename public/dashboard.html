@@ -803,7 +803,7 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
           html += '<ul class="bullet-list">';
           sortedMoves.forEach(m => {
             html += '<li>';
-            html += '<div class="item-title">' + escapeHtml(m.description) + '</div>';
+            html += '<div class="item-title">' + formatDisplayId(m.display_id) + escapeHtml(m.description) + '</div>';
             html += '<div class="item-meta">';
             const badge = m.priority === 'urgent' ? 'badge-urgent'
                        : m.priority === 'someday' ? 'badge-someday'
