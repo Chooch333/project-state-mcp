@@ -1180,7 +1180,7 @@ async function logDecision(supabase: SupabaseClient, args: Args): Promise<string
   if (decidedAt) insertRow.decided_at = decidedAt;
 
   const { data, error } = await supabase.from('decisions').insert(insertRow)
-    .select('id, title, rationale, alternatives_considered, provenance, tags, source, decided_at').single();
+    .select('id, display_id, title, rationale, alternatives_considered, provenance, tags, source, decided_at').single();
   if (error) throw new Error(error.message);
 
   const response: any = { ...data, tag_substitutions: substitutions };
