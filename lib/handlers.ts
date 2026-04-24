@@ -452,6 +452,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
         entity_type: 'next_move',
         event_type: 'added',
         entity_id: m.id,
+        display_id: m.display_id,
         project_id: m.project_id,
         summary: `Next move added (${m.priority}): ${m.description}`,
         source: m.source,
