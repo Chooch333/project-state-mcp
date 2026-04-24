@@ -632,13 +632,13 @@ async function getProjectState(supabase: SupabaseClient, args: Args): Promise<st
   const lessonsLimit = args.recent_lessons_limit ?? 10;
 
   const [allDecisions, assumptions, blockers, nextMoves, snapshot, notes, lessons, project] = await Promise.all([
-    supabase.from('decisions').select('id, title, rationale, alternatives_considered, change_reason, provenance, supersedes, tags, decided_at, source').eq('project_id', projectId).order('decided_at', { ascending: false }),
-    supabase.from('assumptions').select('id, statement, alternatives, tags, source, created_at').eq('project_id', projectId).eq('status', 'active').order('created_at', { ascending: false }),
-    supabase.from('blockers').select('id, question, context, tags, source, created_at').eq('project_id', projectId).is('resolved_at', null).order('created_at', { ascending: false }),
-    supabase.from('next_moves').select('id, description, priority, estimated_effort, tags, source, created_at').eq('project_id', projectId).is('completed_at', null).order('created_at', { ascending: false }),
-    supabase.from('status_snapshots').select('narrative, tags, source, created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('notes').select('id, content, topic, tags, source, created_at, promoted_to_entity, promoted_to_id').eq('project_id', projectId).order('created_at', { ascending: false }).limit(notesLimit),
-    supabase.from('lessons').select('id, situation, lesson, applies_to, severity, tags, source, created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(lessonsLimit),
+    supabase.from('decisions').select('id, display_id, title, rationale, alternatives_considered, change_reason, provenance, supersedes, tags, decided_at, source').eq('project_id', projectId).order('decided_at', { ascending: false }),
+    supabase.from('assumptions').select('id, display_id, statement, alternatives, tags, source, created_at').eq('project_id', projectId).eq('status', 'active').order('created_at', { ascending: false }),
+    supabase.from('blockers').select('id, display_id, question, context, tags, source, created_at').eq('project_id', projectId).is('resolved_at', null).order('created_at', { ascending: false }),
+    supabase.from('next_moves').select('id, display_id, description, priority, estimated_effort, tags, source, created_at').eq('project_id', projectId).is('completed_at', null).order('created_at', { ascending: false }),
+    supabase.from('status_snapshots').select('id, display_id, narrative, tags, source, created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('notes').select('id, display_id, content, topic, tags, source, created_at, promoted_to_entity, promoted_to_id').eq('project_id', projectId).order('created_at', { ascending: false }).limit(notesLimit),
+    supabase.from('lessons').select('id, display_id, situation, lesson, applies_to, severity, tags, source, created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(lessonsLimit),
     supabase.from('projects').select('name, description, repo_url, supabase_project_id, vercel_project_id').eq('id', projectId).maybeSingle(),
   ]);
 
