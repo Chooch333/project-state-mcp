@@ -900,7 +900,7 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
         } else {
           decisions.forEach(dec => {
             html += '<div class="item">';
-            html += '<div class="item-title">' + escapeHtml(dec.title) + '</div>';
+            html += '<div class="item-title">' + formatDisplayId(dec.display_id) + escapeHtml(dec.title) + '</div>';
             html += '<div class="rationale">' + escapeHtml(dec.rationale) + '</div>';
             if (dec.alternatives_considered) {
               html += '<div class="item-body" style="margin-top:6px;"><strong>Alternatives:</strong> ' + escapeHtml(dec.alternatives_considered) + '</div>';
