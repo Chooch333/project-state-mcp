@@ -452,7 +452,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
     });
 
     const { data: completed, error: completedErr } = await applyProjectFilter(
-      supabase.from('next_moves').select('id, project_id, description, source, completed_at, completed_by_plan_id')
+      supabase.from('next_moves').select('id, display_id, project_id, description, source, completed_at, completed_by_plan_id')
         .not('completed_at', 'is', null).gte('completed_at', sinceIso).lte('completed_at', untilIso)
     );
     if (completedErr) throw new Error(`next_moves completed: ${completedErr.message}`);
