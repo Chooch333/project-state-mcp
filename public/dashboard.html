@@ -964,6 +964,42 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     }
 
     // ─────────────────────────────────────────────────────────
+    // Assumptions tab
+    // ─────────────────────────────────────────────────────────
+    async function renderAssumptions() {
+      const el = document.getElementById('assumptions-content');
+      el.innerHTML = '<div class="loading">Loading...</div>';
+      try {
+        const state = await callMcp('get_project_state', { project_slug: currentProject });
+        const assumptions = state.active_assumptions || [];
+
+        let html = '<div class="card">';
+        html += '<h2>Active assumptions <span class="count">' + assumptions.length + '</span></h2>';
+        if (assumptions.length === 0) {
+          html += '<div class="empty">No active assumptions.</div>';
+        } else {
+          assumptions.forEach(a => {
+            html += '<div class="item">';
+            html += '<div class="item-title">' + formatDisplayId(a.display_id) + escapeHtml(a.statement) + '</div>';
+            if (a.alternatives) {
+              html += '<div class="item-body" style="margin-top:6px;"><strong>Alternatives:</strong> ' + escapeHtml(a.alternatives) + '</div>';
+            }
+            html += '<div class="item-meta">';
+            html += '<span>' + new Date(a.created_at).toLocaleDateString() + '</span>';
+            if (a.source) html += '<span>via ' + escapeHtml(a.source) + '</span>';
+            if (a.tags && a.tags.length) html += formatTags(a.tags);
+            html += '</div>';
+            html += '</div>';
+          });
+        }
+        html += '</div>';
+        el.innerHTML = html;
+      } catch (e) {
+        el.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
     // Plans tab
     // ─────────────────────────────────────────────────────────
     async function renderPlans() {
