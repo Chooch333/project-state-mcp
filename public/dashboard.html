@@ -325,6 +325,22 @@
     }
     @media (max-width: 620px) { ul.key-facts { columns: 1; } }
 
+    /* Persistent human-readable ID shown as a monospace prefix on every item */
+    .display-id {
+      display: inline-block;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-subtle);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: 3px;
+      margin-right: 8px;
+      vertical-align: 1px;
+      letter-spacing: 0.02em;
+    }
+
     /* Design Choices card — curated architectural commitments */
     .design-choice {
       padding: 11px 0;
