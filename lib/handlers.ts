@@ -570,7 +570,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
   // ── Status snapshots: added ──
   if (allowEntity('snapshot')) {
     const { data: snaps, error } = await applyProjectFilter(
-      supabase.from('status_snapshots').select('id, project_id, narrative, source, created_at')
+      supabase.from('status_snapshots').select('id, display_id, project_id, narrative, source, created_at')
         .gte('created_at', sinceIso).lte('created_at', untilIso)
     );
     if (error) throw new Error(`snapshots activity: ${error.message}`);
