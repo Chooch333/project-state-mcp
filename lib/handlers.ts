@@ -1528,7 +1528,7 @@ async function addNextMove(supabase: SupabaseClient, args: Args): Promise<string
   };
   if (createdAt) insertRow.created_at = createdAt;
   const { data, error } = await supabase.from('next_moves').insert(insertRow)
-    .select('id, description, priority, estimated_effort, tags, source, created_at').single();
+    .select('id, display_id, description, priority, estimated_effort, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
