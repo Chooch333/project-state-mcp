@@ -592,6 +592,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
         entity_type: 'snapshot',
         event_type: 'added',
         entity_id: s.id,
+        display_id: s.display_id,
         project_id: s.project_id,
         summary: `Status snapshot: ${preview}`,
         source: s.source,
