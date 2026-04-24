@@ -372,6 +372,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
         entity_type: 'assumption',
         event_type: 'added',
         entity_id: a.id,
+        display_id: a.display_id,
         project_id: a.project_id,
         summary: `Assumption: ${a.statement}`,
         source: a.source,
