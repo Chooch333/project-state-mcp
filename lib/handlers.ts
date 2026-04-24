@@ -315,6 +315,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
     entity_type: string;
     event_type: string;
     entity_id: string;
+    display_id?: string | null;
     project_id: string;
     summary: string;
     source?: string | null;
@@ -327,6 +328,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
       entity_type: evt.entity_type,
       event_type: evt.event_type,
       entity_id: evt.entity_id,
+      display_id: evt.display_id ?? null,
       project_slug: idToSlug.get(evt.project_id) ?? evt.project_id,
       summary: evt.summary,
       source: evt.source ?? null,
