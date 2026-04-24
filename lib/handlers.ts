@@ -398,7 +398,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
   // ── Blockers: raised (added), resolved ──
   if (allowEntity('blocker')) {
     const { data: added, error: addedErr } = await applyProjectFilter(
-      supabase.from('blockers').select('id, project_id, question, source, created_at')
+      supabase.from('blockers').select('id, display_id, project_id, question, source, created_at')
         .gte('created_at', sinceIso).lte('created_at', untilIso)
     );
     if (addedErr) throw new Error(`blockers added: ${addedErr.message}`);
