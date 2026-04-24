@@ -413,6 +413,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
         entity_type: 'blocker',
         event_type: 'added',
         entity_id: b.id,
+        display_id: b.display_id,
         project_id: b.project_id,
         summary: `Blocker raised: ${b.question}`,
         source: b.source,
