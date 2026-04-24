@@ -147,15 +147,15 @@ async function getProjectDashboard(supabase: SupabaseClient, args: Args): Promis
   ] = await Promise.all([
     supabase.from('projects').select('name, description, repo_url, status').eq('id', projectId).maybeSingle(),
     supabase.from('status_snapshots').select('narrative, created_at, source').eq('project_id', projectId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('blockers').select('id, question, context, tags, created_at').eq('project_id', projectId).is('resolved_at', null).order('created_at', { ascending: false }),
-    supabase.from('next_moves').select('id, description, priority, estimated_effort, tags, created_at').eq('project_id', projectId).is('completed_at', null).eq('priority', 'urgent').order('created_at', { ascending: false }),
-    supabase.from('next_moves').select('id, description, priority, estimated_effort, tags, created_at').eq('project_id', projectId).is('completed_at', null).neq('priority', 'urgent').order('created_at', { ascending: false }).limit(3),
-    supabase.from('decisions').select('id, title, decided_at').eq('project_id', projectId).is('supersedes', null).gte('decided_at', sevenDaysAgo).order('decided_at', { ascending: false }),
-    supabase.from('notes').select('id, content, topic, tags, created_at').eq('project_id', projectId).gte('created_at', sevenDaysAgo).order('created_at', { ascending: false }).limit(10),
-    supabase.from('lessons').select('id, situation, lesson, severity, created_at').eq('project_id', projectId).gte('created_at', sevenDaysAgo).order('created_at', { ascending: false }),
-    supabase.from('blockers').select('id, question, created_at').eq('project_id', projectId).gte('created_at', sevenDaysAgo).order('created_at', { ascending: false }),
-    supabase.from('blockers').select('id, question, resolved_at').eq('project_id', projectId).not('resolved_at', 'is', null).gte('resolved_at', sevenDaysAgo).order('resolved_at', { ascending: false }),
-    supabase.from('next_moves').select('id, description, completed_at').eq('project_id', projectId).not('completed_at', 'is', null).gte('completed_at', sevenDaysAgo).order('completed_at', { ascending: false }),
+    supabase.from('blockers').select('id, display_id, question, context, tags, created_at').eq('project_id', projectId).is('resolved_at', null).order('created_at', { ascending: false }),
+    supabase.from('next_moves').select('id, display_id, description, priority, estimated_effort, tags, created_at').eq('project_id', projectId).is('completed_at', null).eq('priority', 'urgent').order('created_at', { ascending: false }),
+    supabase.from('next_moves').select('id, display_id, description, priority, estimated_effort, tags, created_at').eq('project_id', projectId).is('completed_at', null).neq('priority', 'urgent').order('created_at', { ascending: false }).limit(3),
+    supabase.from('decisions').select('id, display_id, title, decided_at').eq('project_id', projectId).is('supersedes', null).gte('decided_at', sevenDaysAgo).order('decided_at', { ascending: false }),
+    supabase.from('notes').select('id, display_id, content, topic, tags, created_at').eq('project_id', projectId).gte('created_at', sevenDaysAgo).order('created_at', { ascending: false }).limit(10),
+    supabase.from('lessons').select('id, display_id, situation, lesson, severity, created_at').eq('project_id', projectId).gte('created_at', sevenDaysAgo).order('created_at', { ascending: false }),
+    supabase.from('blockers').select('id, display_id, question, created_at').eq('project_id', projectId).gte('created_at', sevenDaysAgo).order('created_at', { ascending: false }),
+    supabase.from('blockers').select('id, display_id, question, resolved_at').eq('project_id', projectId).not('resolved_at', 'is', null).gte('resolved_at', sevenDaysAgo).order('resolved_at', { ascending: false }),
+    supabase.from('next_moves').select('id, display_id, description, completed_at').eq('project_id', projectId).not('completed_at', 'is', null).gte('completed_at', sevenDaysAgo).order('completed_at', { ascending: false }),
     // Scale counts — total active entities.
     // Decisions need the full list (not head-only count) so we can filter out
     // any that have been superseded by another decision.
