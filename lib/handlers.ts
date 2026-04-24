@@ -377,7 +377,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
 
     // Confirmed/invalidated
     const { data: changed, error: changedErr } = await applyProjectFilter(
-      supabase.from('assumptions').select('id, project_id, statement, status, status_reason, source, status_changed_at')
+      supabase.from('assumptions').select('id, display_id, project_id, statement, status, status_reason, source, status_changed_at')
         .not('status_changed_at', 'is', null).gte('status_changed_at', sinceIso).lte('status_changed_at', untilIso)
     );
     if (changedErr) throw new Error(`assumptions status-changes: ${changedErr.message}`);
