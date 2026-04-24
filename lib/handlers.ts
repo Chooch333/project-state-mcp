@@ -1146,7 +1146,7 @@ async function addLesson(supabase: SupabaseClient, args: Args): Promise<string> 
   };
   if (createdAt) insertRow.created_at = createdAt;
   const { data, error } = await supabase.from('lessons').insert(insertRow)
-    .select('id, situation, lesson, applies_to, severity, tags, source, created_at').single();
+    .select('id, display_id, situation, lesson, applies_to, severity, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
