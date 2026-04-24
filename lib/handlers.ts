@@ -191,6 +191,7 @@ async function getProjectDashboard(supabase: SupabaseClient, args: Args): Promis
   const attention = {
     open_blockers: (allOpenBlockers.data ?? []).map((b) => ({
       id: b.id,
+      display_id: b.display_id,
       question: b.question,
       context: b.context,
       tags: b.tags ?? [],
@@ -198,6 +199,7 @@ async function getProjectDashboard(supabase: SupabaseClient, args: Args): Promis
     })),
     urgent_next_moves: (urgentMoves.data ?? []).map((m) => ({
       id: m.id,
+      display_id: m.display_id,
       description: m.description,
       estimated_effort: m.estimated_effort,
       tags: m.tags ?? [],
@@ -205,6 +207,7 @@ async function getProjectDashboard(supabase: SupabaseClient, args: Args): Promis
     })),
     other_open_next_moves_sample: (otherOpenMoves.data ?? []).map((m) => ({
       id: m.id,
+      display_id: m.display_id,
       description: m.description,
       priority: m.priority,
     })),
