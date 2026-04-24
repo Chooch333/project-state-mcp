@@ -753,7 +753,7 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
           html += '<ul class="bullet-list">';
           d.attention.open_blockers.forEach(b => {
             html += '<li>';
-            html += '<div class="item-title">' + escapeHtml(b.question) + '</div>';
+            html += '<div class="item-title">' + formatDisplayId(b.display_id) + escapeHtml(b.question) + '</div>';
             if (b.context) html += '<div class="item-body">' + escapeHtml(b.context) + '</div>';
             html += '<div class="item-meta">';
             html += '<span class="days-open ' + daysClass(b.days_open) + '">Open ' + b.days_open + ' days</span>';
