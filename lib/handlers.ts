@@ -1009,7 +1009,7 @@ async function addNote(supabase: SupabaseClient, args: Args): Promise<string> {
   };
   if (createdAt) insertRow.created_at = createdAt;
   const { data, error } = await supabase.from('notes').insert(insertRow)
-    .select('id, content, topic, tags, source, created_at').single();
+    .select('id, display_id, content, topic, tags, source, created_at').single();
   if (error) throw new Error(error.message);
   return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
 }
