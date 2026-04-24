@@ -359,7 +359,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
   if (allowEntity('assumption')) {
     // Added
     const { data: added, error: addedErr } = await applyProjectFilter(
-      supabase.from('assumptions').select('id, project_id, statement, source, created_at')
+      supabase.from('assumptions').select('id, display_id, project_id, statement, source, created_at')
         .gte('created_at', sinceIso).lte('created_at', untilIso)
     );
     if (addedErr) throw new Error(`assumptions added: ${addedErr.message}`);
