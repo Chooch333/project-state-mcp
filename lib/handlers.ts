@@ -854,14 +854,14 @@ async function findByTags(supabase: SupabaseClient, args: Args): Promise<string>
   };
 
   await Promise.all([
-    runTagQuery('decision', 'decisions', 'id, title, rationale, alternatives_considered, source, decided_at', 'decided_at'),
-    runTagQuery('assumption', 'assumptions', 'id, statement, alternatives, status, source', 'created_at'),
-    runTagQuery('blocker', 'blockers', 'id, question, context, answer, resolved_at, source', 'created_at'),
-    runTagQuery('next_move', 'next_moves', 'id, description, priority, estimated_effort, completed_at, source', 'created_at'),
+    runTagQuery('decision', 'decisions', 'id, display_id, title, rationale, alternatives_considered, source, decided_at', 'decided_at'),
+    runTagQuery('assumption', 'assumptions', 'id, display_id, statement, alternatives, status, source', 'created_at'),
+    runTagQuery('blocker', 'blockers', 'id, display_id, question, context, answer, resolved_at, source', 'created_at'),
+    runTagQuery('next_move', 'next_moves', 'id, display_id, description, priority, estimated_effort, completed_at, source', 'created_at'),
     runTagQuery('plan', 'plans', 'id, title, status, source', 'created_at'),
-    runTagQuery('snapshot', 'status_snapshots', 'id, narrative, source', 'created_at'),
-    runTagQuery('note', 'notes', 'id, content, topic, promoted_to_entity, promoted_to_id, source', 'created_at'),
-    runTagQuery('lesson', 'lessons', 'id, situation, lesson, applies_to, severity, source', 'created_at'),
+    runTagQuery('snapshot', 'status_snapshots', 'id, display_id, narrative, source', 'created_at'),
+    runTagQuery('note', 'notes', 'id, display_id, content, topic, promoted_to_entity, promoted_to_id, source', 'created_at'),
+    runTagQuery('lesson', 'lessons', 'id, display_id, situation, lesson, applies_to, severity, source', 'created_at'),
   ]);
 
   // Count results by project for cross-project searches
