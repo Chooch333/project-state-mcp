@@ -1238,7 +1238,7 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
   if (decidedAt) insertRow.decided_at = decidedAt;
 
   const { data, error } = await supabase.from('decisions').insert(insertRow)
-    .select('id, title, rationale, change_reason, provenance, tags, source, supersedes, decided_at').single();
+    .select('id, display_id, title, rationale, change_reason, provenance, tags, source, supersedes, decided_at').single();
   if (error) throw new Error(error.message);
 
   const response: any = { ...data, tag_substitutions: substitutions };
