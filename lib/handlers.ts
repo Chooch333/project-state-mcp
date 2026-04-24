@@ -415,7 +415,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
     });
 
     const { data: resolved, error: resolvedErr } = await applyProjectFilter(
-      supabase.from('blockers').select('id, project_id, question, answer, source, resolved_at')
+      supabase.from('blockers').select('id, display_id, project_id, question, answer, source, resolved_at')
         .not('resolved_at', 'is', null).gte('resolved_at', sinceIso).lte('resolved_at', untilIso)
     );
     if (resolvedErr) throw new Error(`blockers resolved: ${resolvedErr.message}`);
