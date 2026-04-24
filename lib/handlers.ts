@@ -349,6 +349,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
         entity_type: 'decision',
         event_type: d.supersedes ? 'superseded' : 'added',
         entity_id: d.id,
+        display_id: d.display_id,
         project_id: d.project_id,
         summary: d.supersedes ? `Superseded decision: ${d.title}` : `Decision: ${d.title}`,
         source: d.source,
