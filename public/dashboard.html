@@ -774,7 +774,7 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
           html += '<ul class="bullet-list">';
           d.attention.urgent_next_moves.forEach(m => {
             html += '<li>';
-            html += '<div class="item-title">' + escapeHtml(m.description) + '</div>';
+            html += '<div class="item-title">' + formatDisplayId(m.display_id) + escapeHtml(m.description) + '</div>';
             html += '<div class="item-meta">';
             html += '<span class="badge badge-urgent">urgent</span>';
             if (m.estimated_effort) html += '<span class="badge badge-muted">' + escapeHtml(m.estimated_effort) + '</span>';
