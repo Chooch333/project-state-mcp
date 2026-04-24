@@ -637,6 +637,11 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       return tags.map(t => '<span class="tag">' + escapeHtml(t) + '</span>').join(' ');
     }
 
+    function formatDisplayId(id) {
+      if (!id) return '';
+      return '<span class="display-id">' + escapeHtml(id) + '</span>';
+    }
+
     function daysClass(days) {
       if (days >= 14) return 'urgent-days';
       if (days >= 7) return 'warn-days';
