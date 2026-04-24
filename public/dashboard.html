@@ -1031,9 +1031,11 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
           lessons.forEach(l => {
             html += '<div class="item">';
             if (l.situation) {
-              html += '<div class="item-title">' + escapeHtml(l.situation) + '</div>';
+              html += '<div class="item-title">' + formatDisplayId(l.display_id) + escapeHtml(l.situation) + '</div>';
+              html += '<div class="item-body">' + escapeHtml(l.lesson) + '</div>';
+            } else {
+              html += '<div class="item-body">' + formatDisplayId(l.display_id) + escapeHtml(l.lesson) + '</div>';
             }
-            html += '<div class="item-body">' + escapeHtml(l.lesson) + '</div>';
             if (l.applies_to) {
               html += '<div class="item-body" style="margin-top:4px;"><em>Applies to: ' + escapeHtml(l.applies_to) + '</em></div>';
             }
