@@ -992,9 +992,11 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
           notes.forEach(n => {
             html += '<div class="item">';
             if (n.topic) {
-              html += '<div class="item-title">' + escapeHtml(n.topic) + '</div>';
+              html += '<div class="item-title">' + formatDisplayId(n.display_id) + escapeHtml(n.topic) + '</div>';
+              html += '<div class="item-body">' + escapeHtml(n.content) + '</div>';
+            } else {
+              html += '<div class="item-body">' + formatDisplayId(n.display_id) + escapeHtml(n.content) + '</div>';
             }
-            html += '<div class="item-body">' + escapeHtml(n.content) + '</div>';
             html += '<div class="item-meta">';
             html += '<span>' + new Date(n.created_at).toLocaleDateString() + '</span>';
             if (n.promoted_to_entity) html += '<span class="badge badge-good">promoted → ' + escapeHtml(n.promoted_to_entity) + '</span>';
