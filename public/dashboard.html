@@ -425,6 +425,30 @@
       cursor: pointer;
     }
     .token-submit:hover { background: #92400e; }
+
+    /* Protocol callout — persistent reminder below the header */
+    .protocol-callout {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 24px;
+      font-size: 13px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .protocol-callout a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+    }
+    .protocol-callout a:hover { text-decoration: underline; }
+    .protocol-callout .callout-label {
+      font-weight: 500;
+      color: var(--text);
+    }
   </style>
 </head>
 <body>
