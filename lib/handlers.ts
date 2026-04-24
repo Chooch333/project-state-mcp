@@ -570,6 +570,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
         entity_type: 'lesson',
         event_type: 'added',
         entity_id: l.id,
+        display_id: l.display_id,
         project_id: l.project_id,
         summary: `Lesson (${l.severity}): ${l.lesson}`,
         source: l.source,
