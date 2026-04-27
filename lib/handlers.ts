@@ -632,7 +632,7 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
 
 async function listProjects(supabase: SupabaseClient, args: Args): Promise<string> {
   const includeArchived = args.include_archived === true;
-  let query = supabase.from('projects').select('slug, name, description, status, repo_url, supabase_project_id, vercel_project_id');
+  let query = supabase.from('projects').select('slug, name, description, status, repo_url, deployment_url, supabase_project_id, vercel_project_id');
   if (!includeArchived) query = query.neq('status', 'archived');
   const { data, error } = await query.order('name');
   if (error) throw new Error(error.message);
