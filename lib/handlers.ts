@@ -979,14 +979,19 @@ function extractContent(entityType: string, row: any): string {
 // ─────────────────────────────────────────────────────────
 
 async function createProject(supabase: SupabaseClient, args: Args): Promise<string> {
-  const { data, error } = await supabase.from('projects').insert({
+  const insertRow: any = {
     slug: args.slug,
     name: args.name,
     description: args.description ?? null,
     repo_url: args.repo_url ?? null,
+    deployment_url: args.deployment_url ?? null,
     supabase_project_id: args.supabase_project_id ?? null,
     vercel_project_id: args.vercel_project_id ?? null,
-  }).select().single();
+  };
+  if (typeof args.letter_code === 'string' && args.letter_code.trim().length > 0) {
+    insertRow.letter_code = args.letter_code.trim().toUpperCase();
+  }
+  const { data, error } = await supabase.from('projects').insert(insertRow).select().single();
   if (error) throw new Error(error.message);
   return JSON.stringify(data, null, 2);
 }
