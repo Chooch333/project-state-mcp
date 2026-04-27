@@ -248,6 +248,7 @@ async function getProjectDashboard(supabase: SupabaseClient, args: Args): Promis
       description: project.data.description,
       status: project.data.status,
       repo_url: project.data.repo_url,
+      deployment_url: project.data.deployment_url,
     },
     status: {
       line: statusLine,
