@@ -145,7 +145,7 @@ async function getProjectDashboard(supabase: SupabaseClient, args: Args): Promis
     recentMovesCompleted,
     scaleCounts,
   ] = await Promise.all([
-    supabase.from('projects').select('name, description, repo_url, status').eq('id', projectId).maybeSingle(),
+    supabase.from('projects').select('name, description, repo_url, deployment_url, status').eq('id', projectId).maybeSingle(),
     supabase.from('status_snapshots').select('narrative, created_at, source').eq('project_id', projectId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('blockers').select('id, display_id, question, context, tags, created_at').eq('project_id', projectId).is('resolved_at', null).order('created_at', { ascending: false }),
     supabase.from('next_moves').select('id, display_id, description, priority, estimated_effort, tags, created_at').eq('project_id', projectId).is('completed_at', null).eq('priority', 'urgent').order('created_at', { ascending: false }),
