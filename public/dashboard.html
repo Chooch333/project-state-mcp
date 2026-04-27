@@ -749,6 +749,9 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
         if (d.project.repo_url) {
           html += '<div class="status-meta">Repo: <a href="' + escapeHtml(d.project.repo_url) + '" target="_blank" rel="noopener">' + escapeHtml(d.project.repo_url) + '</a></div>';
         }
+        if (d.project.deployment_url) {
+          html += '<div class="status-meta">Live: <a href="' + escapeHtml(d.project.deployment_url) + '" target="_blank" rel="noopener">' + escapeHtml(d.project.deployment_url) + '</a></div>';
+        }
         html += '</div>';
 
         // Status card with narrative + 2-column Key Facts
