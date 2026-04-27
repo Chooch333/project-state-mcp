@@ -652,7 +652,7 @@ async function getProjectState(supabase: SupabaseClient, args: Args): Promise<st
     supabase.from('status_snapshots').select('id, display_id, narrative, tags, source, created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('notes').select('id, display_id, content, topic, tags, source, created_at, promoted_to_entity, promoted_to_id').eq('project_id', projectId).order('created_at', { ascending: false }).limit(notesLimit),
     supabase.from('lessons').select('id, display_id, situation, lesson, applies_to, severity, tags, source, created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(lessonsLimit),
-    supabase.from('projects').select('name, description, repo_url, supabase_project_id, vercel_project_id').eq('id', projectId).maybeSingle(),
+    supabase.from('projects').select('name, description, repo_url, deployment_url, supabase_project_id, vercel_project_id').eq('id', projectId).maybeSingle(),
   ]);
 
   const errors = [allDecisions.error, assumptions.error, blockers.error, nextMoves.error, snapshot.error, notes.error, lessons.error, project.error].filter(Boolean);
