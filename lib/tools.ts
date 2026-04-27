@@ -129,7 +129,7 @@ export const TOOLS = [
   },
   {
     name: 'create_project',
-    description: 'Register a new project in the state database.',
+    description: 'Register a new project in the state database. Pass letter_code to set the project\'s display-ID prefix at creation time (otherwise display_id assignment will fail until letter_code is set via SQL — see D-060).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -137,8 +137,10 @@ export const TOOLS = [
         name: { type: 'string' },
         description: { type: 'string' },
         repo_url: { type: 'string' },
+        deployment_url: { type: 'string', description: 'Live deployment URL (e.g., Vercel production URL). Distinct from repo_url which points to source.' },
         supabase_project_id: { type: 'string' },
         vercel_project_id: { type: 'string' },
+        letter_code: { type: 'string', description: 'Single-letter (or 2-3 char) prefix for human-readable display IDs (e.g. "G" → G-001, G-002). Must be unique across projects. Stored as upper-case. Strongly recommended at creation time.' },
       },
       required: ['slug', 'name'],
     },
