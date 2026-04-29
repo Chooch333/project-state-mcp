@@ -1079,9 +1079,9 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
             html += '<div class="item">';
             if (n.topic) {
               html += '<div class="item-title">' + formatDisplayId(n.display_id) + escapeHtml(n.topic) + '</div>';
-              html += '<div class="item-body">' + escapeHtml(n.content) + '</div>';
+              html += '<div class="item-body">' + linkify(n.content) + '</div>';
             } else {
-              html += '<div class="item-body">' + formatDisplayId(n.display_id) + escapeHtml(n.content) + '</div>';
+              html += '<div class="item-body">' + formatDisplayId(n.display_id) + linkify(n.content) + '</div>';
             }
             html += '<div class="item-meta">';
             html += '<span>' + new Date(n.created_at).toLocaleDateString() + '</span>';
