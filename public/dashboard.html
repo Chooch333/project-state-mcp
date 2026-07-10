@@ -1034,9 +1034,11 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
             html += '<div class="item-meta">';
             const statusBadge = ({
               draft: 'badge-muted',
-              blessed: 'badge-normal',
-              executing: 'badge-warn',
-              complete: 'badge-good',
+              queued: 'badge-normal',
+              running: 'badge-warn',
+              succeeded: 'badge-good',
+              failed: 'badge-urgent',
+              blocked: 'badge-warn',
               abandoned: 'badge-muted',
             })[p.status] || 'badge-muted';
             html += '<span class="badge ' + statusBadge + '">' + escapeHtml(p.status) + '</span>';
