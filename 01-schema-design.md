@@ -124,12 +124,12 @@ create table plans (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references projects(id) on delete cascade,
   title text not null,                     -- 'Per-stop photo uploads'
-  status text not null default 'draft',    -- 'draft' | 'blessed' | 'executing' | 'complete' | 'abandoned'
+  status text not null default 'draft',    -- 'draft' | 'queued' | 'running' | 'succeeded' | 'failed' | 'blocked' | 'abandoned'
   content text not null,                   -- full markdown plan
   executor_report text,                    -- validator's output after execution
   source text not null,
   created_at timestamptz not null default now(),
-  blessed_at timestamptz,
+  queued_at timestamptz,
   completed_at timestamptz
 );
 
