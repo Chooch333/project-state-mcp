@@ -1842,7 +1842,7 @@ async function describeCapabilities(supabase: SupabaseClient, _args: Args): Prom
     assumption: 'Something believed to be true without verification. Status: active / confirmed / invalidated. Transitions through update_assumption.',
     blocker: 'An open question or external dependency stopping progress. Resolves when someone answers or the dependency lifts.',
     next_move: 'A concrete action. Has priority (urgent/normal/someday) and estimated_effort (small/medium/large). Completes when done.',
-    plan: 'A structured document describing how something will be built. Goes through lifecycle: draft → blessed → executing → complete (or abandoned). Content is versioned — every edit creates a new entry in plan_revisions.',
+    plan: 'A structured document describing how something will be built. Goes through lifecycle: draft → queued → running → succeeded | failed | blocked | abandoned. failed and blocked are not terminal — a plan may be re-queued. Content is versioned — every edit creates a new entry in plan_revisions.',
     note: 'Low-friction capture. Use for anything worth remembering that does not yet fit a structured entity. Can later be promoted into a decision / assumption / blocker / next_move / lesson.',
     lesson: 'A retrospective observation. What happened, what to do differently. Carries severity (minor/normal/major).',
     snapshot: 'A narrative summary of where a project is right now. Written periodically to capture the feel of the moment, not just the structured state.',
