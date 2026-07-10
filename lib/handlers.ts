@@ -499,21 +499,21 @@ async function getActivity(supabase: SupabaseClient, args: Args): Promise<string
       });
     });
 
-    const { data: blessed, error: blessedErr } = await applyProjectFilter(
-      supabase.from('plans').select('id, project_id, title, status, source, blessed_at')
-        .not('blessed_at', 'is', null).gte('blessed_at', sinceIso).lte('blessed_at', untilIso)
+    const { data: queued, error: queuedErr } = await applyProjectFilter(
+      supabase.from('plans').select('id, project_id, title, status, source, queued_at')
+        .not('queued_at', 'is', null).gte('queued_at', sinceIso).lte('queued_at', untilIso)
     );
-    if (blessedErr) throw new Error(`plans blessed: ${blessedErr.message}`);
-    (blessed ?? []).forEach((p: any) => {
+    if (queuedErr) throw new Error(`plans queued: ${queuedErr.message}`);
+    (queued ?? []).forEach((p: any) => {
       pushEvent({
-        timestamp: p.blessed_at,
+        timestamp: p.queued_at,
         entity_type: 'plan',
         event_type: 'plan_status_changed',
         entity_id: p.id,
         project_id: p.project_id,
-        summary: `Plan blessed: ${p.title}`,
+        summary: `Plan queued: ${p.title}`,
         source: p.source,
-        extra: { new_status: 'blessed' },
+        extra: { new_status: 'queued' },
       });
     });
 
