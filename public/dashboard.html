@@ -548,7 +548,7 @@ Eight entity types, ordered roughly by commitment level:
 
 **Decision** is a closed commitment that shapes what gets built. Immutable once written — to change a decision, you supersede it, which leaves the old one in history and adds a new one that points back. Each decision carries rationale (why this is correct on its own terms), optional change_reason (when superseding: why we moved from the old to the new), and optional provenance (what was consulted — web searches, MCP queries, uploaded files, prior decisions).
 
-**Plan** is a structured document describing how something will be built. Goes through a lifecycle: draft → blessed → executing → complete (or abandoned). Plan content is versioned — every edit creates a new entry in plan_revisions, so you can walk back through the evolution of a plan.
+**Plan** is a structured document describing how something will be built. Goes through a lifecycle: draft → queued → running → succeeded (or failed / blocked / abandoned). failed and blocked are not terminal — a plan may be re-queued after review or once a hard gate clears. Plan content is versioned — every edit creates a new entry in plan_revisions, so you can walk back through the evolution of a plan.
 
 **Lesson** is a retrospective observation. What happened, what to do differently. Carries severity (minor, normal, major).
 
