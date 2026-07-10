@@ -136,7 +136,7 @@ create table plans (
 create index plans_project_status_idx on plans (project_id, status);
 ```
 
-Rationale: Plans are bigger than other entities (the example plan is ~250 lines), so a separate table makes sense. Status transitions are the lifecycle: draft → blessed (by you) → executing (Executor picks up) → complete (Validator signs off) or abandoned. `executor_report` is where the Validator writes deltas and observations.
+Rationale: Plans are bigger than other entities (the example plan is ~250 lines), so a separate table makes sense. Status transitions are the lifecycle: draft → queued (by you) → running (orchestrator picks up) → succeeded (verified) or failed / blocked (not terminal — may be re-queued) or abandoned. `executor_report` is where the Validator writes deltas and observations.
 
 ### `status_snapshots`
 Point-in-time narrative summaries — the "one paragraph of where things are." Optional but useful for the morning-brief agent later.
