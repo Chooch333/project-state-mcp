@@ -412,12 +412,12 @@ export const TOOLS = [
   },
   {
     name: 'update_plan_status',
-    description: 'Transition a plan through its lifecycle.',
+    description: 'Transition a plan through its lifecycle: draft (initial write) → queued (approved, on the shelf) → running (orchestrator claimed it) → succeeded | failed | blocked | abandoned. failed and blocked are not terminal — a plan may be re-queued after review or after a hard gate clears.',
     inputSchema: {
       type: 'object',
       properties: {
         plan_id: { type: 'string' },
-        new_status: { type: 'string', enum: ['blessed', 'executing', 'complete', 'abandoned'] },
+        new_status: { type: 'string', enum: ['queued', 'running', 'succeeded', 'failed', 'blocked', 'abandoned'] },
         executor_report: { type: 'string' },
       },
       required: ['plan_id', 'new_status'],
