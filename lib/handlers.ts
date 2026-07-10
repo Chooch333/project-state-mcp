@@ -1767,8 +1767,8 @@ async function listPlans(supabase: SupabaseClient, args: Args): Promise<string> 
 
   const includeContent = args.include_content === true;
   const selectFields = includeContent
-    ? 'id, title, status, content, provenance, tags, source, current_revision, created_at, blessed_at, completed_at'
-    : 'id, title, status, provenance, tags, source, current_revision, created_at, blessed_at, completed_at';
+    ? 'id, title, status, content, provenance, tags, source, current_revision, created_at, queued_at, completed_at'
+    : 'id, title, status, provenance, tags, source, current_revision, created_at, queued_at, completed_at';
 
   const { data, error } = await supabase
     .from('plans')
