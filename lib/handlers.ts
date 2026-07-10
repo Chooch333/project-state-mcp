@@ -1733,8 +1733,8 @@ async function getPlanRevisions(supabase: SupabaseClient, args: Args): Promise<s
 
 async function updatePlanStatus(supabase: SupabaseClient, args: Args): Promise<string> {
   const update: any = { status: args.new_status };
-  if (args.new_status === 'blessed') update.blessed_at = new Date().toISOString();
-  if (args.new_status === 'complete' || args.new_status === 'abandoned') update.completed_at = new Date().toISOString();
+  if (args.new_status === 'queued') update.queued_at = new Date().toISOString();
+  if (args.new_status === 'succeeded' || args.new_status === 'abandoned') update.completed_at = new Date().toISOString();
   if (args.executor_report) update.executor_report = args.executor_report;
 
   const { data, error } = await supabase.from('plans').update(update).eq('id', args.plan_id).select().single();
