@@ -1044,7 +1044,7 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
             html += '<span class="badge ' + statusBadge + '">' + escapeHtml(p.status) + '</span>';
             html += '<span>rev ' + (p.current_revision || 1) + '</span>';
             html += '<span>' + new Date(p.created_at).toLocaleDateString() + '</span>';
-            if (p.blessed_at) html += '<span>blessed ' + new Date(p.blessed_at).toLocaleDateString() + '</span>';
+            if (p.queued_at) html += '<span>queued ' + new Date(p.queued_at).toLocaleDateString() + '</span>';
             if (p.completed_at) html += '<span>closed ' + new Date(p.completed_at).toLocaleDateString() + '</span>';
             if (p.source) html += '<span>via ' + escapeHtml(p.source) + '</span>';
             if (p.tags && p.tags.length) html += formatTags(p.tags);
