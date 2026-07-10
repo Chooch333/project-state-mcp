@@ -385,7 +385,7 @@ export const TOOLS = [
   },
   {
     name: 'update_plan_content',
-    description: 'Edit a plan\'s content, creating a new revision snapshot. Every time you call this, the plan\'s current_revision increments and a row is added to plan_revisions capturing the new state. Use when the plan has evolved — the user iterated on the approach, refined the scope, or added detail. Do NOT use for status transitions (draft → blessed → executing → complete); use update_plan_status for that. Always try to supply change_reason — a short explanation of why the plan evolved. If unclear, ask the user; the response will warn you if you leave it empty. new_title is optional and defaults to the current title.',
+    description: 'Edit a plan\'s content, creating a new revision snapshot. Every time you call this, the plan\'s current_revision increments and a row is added to plan_revisions capturing the new state. Use when the plan has evolved — the user iterated on the approach, refined the scope, or added detail. Do NOT use for status transitions (draft → queued → running → succeeded/failed/blocked/abandoned); use update_plan_status for that. Always try to supply change_reason — a short explanation of why the plan evolved. If unclear, ask the user; the response will warn you if you leave it empty. new_title is optional and defaults to the current title.',
     inputSchema: {
       type: 'object',
       properties: {
