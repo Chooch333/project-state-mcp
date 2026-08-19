@@ -16,6 +16,18 @@ const ENTITY_TABLES = [
 
 const SIMILARITY_THRESHOLD = 0.55;
 
+// Identifier-style tags (e.g. "wg-017", "e-223", "bb-2026", "pp-018") are
+// stable references, not natural-language words. Trigram similarity is
+// blind to short numeric discriminators -- "wg-017" and "wg-013" share
+// nearly all trigrams and differ only in the final digit, scoring above
+// SIMILARITY_THRESHOLD. So the exact tags meant to be stable identifiers
+// are exactly what this matcher collapses. The threshold itself is right
+// for its intended job (photos -> photo); identifier tags need to be
+// exempt from fuzzy substitution entirely instead. Tags arrive here
+// already normalized (normalizeOne runs first: lowercased, hyphenated),
+// so this pattern match is reliable, not fragile against casing/spacing.
+const IDENTIFIER_TAG_PATTERN = /^[a-z]+-?\d+$/;
+
 // ─────────────────────────────────────────────────────────
 // Normalization: shape a raw string into a canonical tag.
 // ─────────────────────────────────────────────────────────
