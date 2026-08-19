@@ -254,6 +254,11 @@ export async function expandForQuery(
 
   for (const inp of normalized) {
     expandedSet.add(inp);
+    // Identifier-style tags are exempt from fuzzy expansion too, for the
+    // same reason reconcileWithExisting exempts them from fuzzy write-time
+    // substitution: distinct identifiers (wg-017 vs wg-013) should not be
+    // treated as equivalent, whether writing or searching.
+    if (IDENTIFIER_TAG_PATTERN.test(inp)) continue;
     const matched: string[] = [];
     for (const existingTag of existing) {
       if (existingTag === inp) continue;
