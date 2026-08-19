@@ -195,6 +195,10 @@ export function reconcileWithExisting(
       final.add(inp);
       continue;
     }
+    if (IDENTIFIER_TAG_PATTERN.test(inp)) {
+      final.add(inp);
+      continue;
+    }
     // Find best fuzzy match above threshold
     let best: { tag: string; score: number } | null = null;
     for (const existing of existingTags) {
