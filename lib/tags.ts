@@ -106,11 +106,16 @@ export function normalizeOne(tag: unknown): string | null {
   t = t.replace(/^-+|-+$/g, '');
   if (!t) return null;
 
-  // Conservative singularization on the final hyphenated segment.
-  // This handles "stop-photos" → "stop-photo" without touching the stem.
-  const parts = t.split('-');
-  parts[parts.length - 1] = singularize(parts[parts.length - 1]);
-  t = parts.join('-');
+  // Slug/BB-ID-shaped tags are stable references, not natural-language
+  // plurals -- skip singularization entirely so a meaningful trailing "s"
+  // survives (bb-...-fixes stays bb-...-fixes, not bb-...-fix).
+  if (!isSlugShaped(t)) {
+    // Conservative singularization on the final hyphenated segment.
+    // This handles "stop-photos" → "stop-photo" without touching the stem.
+    const parts = t.split('-');
+    parts[parts.length - 1] = singularize(parts[parts.length - 1]);
+    t = parts.join('-');
+  }
 
   return t;
 }
