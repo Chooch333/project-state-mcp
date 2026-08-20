@@ -247,7 +247,7 @@ export function reconcileWithExisting(
       final.add(inp);
       continue;
     }
-    if (IDENTIFIER_TAG_PATTERN.test(inp)) {
+    if (isSlugShaped(inp)) {
       final.add(inp);
       continue;
     }
