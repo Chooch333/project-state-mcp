@@ -28,6 +28,52 @@ const SIMILARITY_THRESHOLD = 0.55;
 // so this pattern match is reliable, not fragile against casing/spacing.
 const IDENTIFIER_TAG_PATTERN = /^[a-z]+-?\d+$/;
 
+// BB-2026-08-19-identifier-tag-exemption-extension (resolves D-064):
+// D-062's IDENTIFIER_TAG_PATTERN only catches short numeric identifiers
+// (wg-017). It does not catch BB-ID / brief-slug style compound tags
+// (bb-2026-08-18-hygiene-census-fixes, wg-eighteen-hygiene,
+// session-log-repair), which are just as much stable references but have
+// a different shape: multiple hyphen-separated segments, often but not
+// always with an embedded date.
+//
+// Chosen predicate: a tag is "slug-shaped" if it has SLUG_TAG_MIN_SEGMENTS
+// (3) or more hyphen-separated segments. Reasoning, including the
+// false-positive/false-negative tradeoffs considered:
+//
+//   - Real BB-ID / brief-slug tags in this system are reliably 3+ segments
+//     (bb-2026-08-18-hygiene-census-fixes has 7; wg-eighteen-hygiene has 3;
+//     session-log-repair has 3). A pure numeric-identifier check (D-062's
+//     pattern) does not fire on any of these since they have no bare
+//     "letters-digits" suffix shape.
+//   - Ordinary natural-language tags that must KEEP reconciling/singularizing
+//     (photo/photos, merge-candidate/merge-candidates, build-manager) are, in
+//     every case observed in this system, 1-2 segments. A 3-segment floor
+//     leaves that behavior completely untouched -- this is the load-bearing
+//     non-regression requirement (D-024's original design; C-057 confirmed
+//     merge-candidates -> merge-candidate is correct, intended behavior, not
+//     a bug).
+//   - Known, accepted false negative: a short 2-segment reference tag like
+//     "review-corrections" is NOT caught by this rule (2 segments, no
+//     digits). It is syntactically indistinguishable from an ordinary
+//     plural compound noun ("merge-candidates") -- no shape-only predicate
+//     can separate the two without also breaking the required
+//     merge-candidates non-regression case. The mitigation is corrected
+//     workaround guidance (see the D-061 follow-up decision/lesson): use
+//     the fuller slug (bb-review-corrections-2026-08-19) as the durable
+//     identifier tag, not a short derived phrase -- the fuller slug DOES
+//     satisfy this predicate and is reliably protected.
+//   - No date-fragment-specific branch was added on top of the segment
+//     count: every real BB-ID slug with an embedded date already produces
+//     3+ segments on its own (bb / YYYY / MM / DD / slug-words...), so a
+//     separate date regex would be redundant with the segment-count rule
+//     for every case actually observed.
+const SLUG_TAG_MIN_SEGMENTS = 3;
+
+function isSlugShaped(tag: string): boolean {
+  if (IDENTIFIER_TAG_PATTERN.test(tag)) return true;
+  return tag.split('-').length >= SLUG_TAG_MIN_SEGMENTS;
+}
+
 // ─────────────────────────────────────────────────────────
 // Normalization: shape a raw string into a canonical tag.
 // ─────────────────────────────────────────────────────────
