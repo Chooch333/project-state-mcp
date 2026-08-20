@@ -112,6 +112,12 @@ export async function callTool(name: string, args: Args): Promise<string> {
       return listPlans(supabase, args);
     case 'write_status_snapshot':
       return writeStatusSnapshot(supabase, args);
+    case 'post_judgment_call':
+      return postJudgmentCall(supabase, args);
+    case 'list_judgment_calls':
+      return listJudgmentCalls(supabase, args);
+    case 'dispose_judgment_call':
+      return disposeJudgmentCall(supabase, args);
     case 'describe_capabilities':
       return describeCapabilities(supabase, args);
     default:
