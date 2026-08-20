@@ -461,4 +461,48 @@ export const TOOLS = [
       required: ['project_slug', 'narrative', 'source'],
     },
   },
+  {
+    name: 'post_judgment_call',
+    description: 'Post a disclosure to the build-to-Charles Q-channel: something a build chat wants Charles to see that is neither a blocking question nor a clean "done, nothing to flag" close — a judgment call made on its own authority, a loose end, an FYI. Returns a prefixed display_id (e.g. CBR-J-003) to hand to Charles, who can carry it into a design-assist chat for optional, non-blocking review. Always bound to the originating build brief via plan_id. Distinct from the blocking-question Q-channel (open/answered/discussing/resolved) — disclosures are born already non-blocking (status noted) and never gate a build or a DA session start.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_slug: { type: 'string' },
+        plan_id: { type: 'string', description: 'The build brief (plan) this disclosure belongs to. Required — every disclosure is bound to the brief that produced it.' },
+        title: { type: 'string' },
+        context: { type: 'string', description: 'The what/why/what-it-touched, in plain English.' },
+        tags: { type: 'array', items: { type: 'string' }, description: '"judgment-call" is always added automatically; pass additional tags here.' },
+        asked_by: { type: 'string', description: 'Optional identifier for the posting build chat/session.' },
+      },
+      required: ['project_slug', 'plan_id', 'title', 'context'],
+    },
+  },
+  {
+    name: 'list_judgment_calls',
+    description: 'List disclosures posted to the build-to-Charles Q-channel for a project — the "Calls to review" inbox. Defaults to status=noted (the unreviewed, actionable inbox); pass status="all" to see the full disclosure history including already-disposed items. Never includes blocking questions (origin build/charles-directed) — use this only for the build-judgment disclosure channel.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_slug: { type: 'string' },
+        status: { type: 'string', description: 'Filter by status: "noted" (default — the review inbox), "reviewed-agree", "reviewed-corrected", or "all".' },
+      },
+      required: ['project_slug'],
+    },
+  },
+  {
+    name: 'dispose_judgment_call',
+    description: 'Mark a disclosure reviewed: reviewed-agree (a DA chat looked, concurs, nothing more to do) or reviewed-corrected (a DA chat disagreed and logged a correcting Decision — linked_decision is required in that case, mirroring the resolve-needs-decision rule on blocking questions). Appends a message to the disclosure\'s thread recording what the reviewer did. Operates only on build-judgment-origin rows.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        display_id: { type: 'string', description: 'The disclosure\'s display_id, e.g. CBR-J-003. Globally unique — always cite in full.' },
+        disposition: { type: 'string', enum: ['reviewed-agree', 'reviewed-corrected'] },
+        linked_decision: { type: 'string', description: 'Required when disposition is reviewed-corrected. The id of the correcting Decision.' },
+        resolved_decision_project: { type: 'string', description: 'Project slug the linked decision lives on, if different from the disclosure\'s own project.' },
+        message: { type: 'string', description: 'What the reviewer found/decided — appended to the disclosure\'s message thread.' },
+        author: { type: 'string', description: 'Who is reviewing. Defaults to "da".' },
+      },
+      required: ['display_id', 'disposition', 'message'],
+    },
+  },
 ] as const;
