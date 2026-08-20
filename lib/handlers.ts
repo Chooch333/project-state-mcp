@@ -1893,3 +1893,97 @@ async function describeCapabilities(supabase: SupabaseClient, _args: Args): Prom
     projects_registered: projects ?? [],
   }, null, 2);
 }
+
+// ─────────────────────────────────────────────────────────
+// Q-channel disclosures (build-judgment) — BB-2026-08-19-judgment-call-channel
+// A disclosure is a build_questions row born in status 'noted', origin
+// 'build-judgment': non-blocking, and never appears in the open/discussing
+// "what's blocking this build" queries a DA chat runs at session start.
+// Pull-inbox only — nothing pushes. Scoped strictly to this origin; the
+// blocking-question side of the Q-channel (open/answered/discussing/
+// resolved, origin build/charles-directed) is untouched and out of scope
+// here. See PROTOCOL.md "Cross-chat questions (the Q-channel)".
+// ─────────────────────────────────────────────────────────
+
+async function postJudgmentCall(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (!args.plan_id) throw new Error('plan_id is required — every disclosure is bound to the brief that produced it.');
+  const projectId = await resolveProjectId(supabase, args.project_slug);
+  const { tags, substitutions } = await normalizeAndReconcile(
+    supabase,
+    [...(Array.isArray(args.tags) ? args.tags : []), 'judgment-call'],
+    projectId
+  );
+  const insertRow: any = {
+    project_id: projectId,
+    plan_id: args.plan_id,
+    title: args.title,
+    context: args.context ?? null,
+    status: 'noted',
+    origin: 'build-judgment',
+    asked_by: args.asked_by ?? null,
+    tags,
+  };
+  const { data, error } = await supabase.from('build_questions').insert(insertRow)
+    .select('id, display_id, title, context, status, origin, plan_id, tags, created_at').single();
+  if (error) throw new Error(error.message);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
+}
+
+async function listJudgmentCalls(supabase: SupabaseClient, args: Args): Promise<string> {
+  const projectId = await resolveProjectId(supabase, args.project_slug);
+  let query = supabase.from('build_questions')
+    .select('id, display_id, title, context, status, plan_id, tags, linked_decision, resolved_decision_project, created_at, resolved_at')
+    .eq('project_id', projectId)
+    .eq('origin', 'build-judgment')
+    .order('created_at', { ascending: false });
+
+  const status = typeof args.status === 'string' && args.status.trim().length > 0 ? args.status.trim() : 'noted';
+  if (status !== 'all') query = query.eq('status', status);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  return JSON.stringify({
+    project_slug: args.project_slug,
+    status_filter: status,
+    count: data?.length ?? 0,
+    disclosures: data ?? [],
+  }, null, 2);
+}
+
+async function disposeJudgmentCall(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (!['reviewed-agree', 'reviewed-corrected'].includes(args.disposition)) {
+    throw new Error(`disposition must be "reviewed-agree" or "reviewed-corrected" (got "${args.disposition}")`);
+  }
+  if (!args.message) throw new Error('message is required — every disposition appends a trail entry explaining what the reviewer did.');
+
+  const { data: row, error: fetchError } = await supabase.from('build_questions')
+    .select('id, origin, status').eq('display_id', args.display_id).maybeSingle();
+  if (fetchError) throw new Error(fetchError.message);
+  if (!row) throw new Error(`No disclosure found with display_id '${args.display_id}'.`);
+  if (row.origin !== 'build-judgment') {
+    throw new Error(`'${args.display_id}' is not a disclosure (origin '${row.origin}') — dispose_judgment_call only operates on build-judgment rows. Blocking questions are answered through the normal Q-channel flow.`);
+  }
+  if (args.disposition === 'reviewed-corrected' && !args.linked_decision) {
+    throw new Error('linked_decision is required when disposition is reviewed-corrected — a disagreement always leaves a trail to the fix.');
+  }
+
+  const updateRow: any = {
+    status: args.disposition,
+    resolved_at: new Date().toISOString(),
+  };
+  if (args.linked_decision) updateRow.linked_decision = args.linked_decision;
+  if (args.resolved_decision_project) updateRow.resolved_decision_project = args.resolved_decision_project;
+
+  const { data: updated, error: updateError } = await supabase.from('build_questions')
+    .update(updateRow).eq('id', row.id)
+    .select('id, display_id, title, status, linked_decision, resolved_decision_project, resolved_at').single();
+  if (updateError) throw new Error(updateError.message);
+
+  const { data: messageRow, error: messageError } = await supabase.from('build_question_messages')
+    .insert({ question_id: row.id, author: args.author ?? 'da', body: args.message })
+    .select('id, author, body, created_at').single();
+  if (messageError) throw new Error(messageError.message);
+
+  return JSON.stringify({ ...updated, message: messageRow }, null, 2);
+}
