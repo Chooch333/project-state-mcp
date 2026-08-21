@@ -449,6 +449,136 @@
       font-weight: 500;
       color: var(--text);
     }
+
+    /* Build Map tab */
+    .buildmap-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+    }
+    .buildmap-summary-stat {
+      font-size: 14px;
+      color: var(--text);
+    }
+    .buildmap-summary-stat strong { font-weight: 600; }
+    .buildmap-lanes {
+      display: flex;
+      flex-direction: column;
+      gap: 34px;
+      margin-top: 8px;
+    }
+    .buildmap-lane-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 14px;
+    }
+    .buildmap-track {
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      padding-top: 8px;
+    }
+    .buildmap-track::before {
+      content: '';
+      position: absolute;
+      top: 16px;
+      left: 8px;
+      right: 8px;
+      height: 2px;
+      background: var(--border-strong);
+      z-index: 0;
+    }
+    .buildmap-step {
+      position: relative;
+      z-index: 1;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      min-width: 90px;
+      padding: 0 6px;
+    }
+    .buildmap-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      box-sizing: border-box;
+      margin-bottom: 8px;
+      background: var(--surface);
+    }
+    .bm-done { background: var(--good); border: 2px solid var(--good); }
+    .bm-building {
+      background: var(--accent);
+      border: 2px solid var(--accent);
+      animation: bm-pulse 1.6s ease-in-out infinite;
+    }
+    .bm-shelf { background: var(--info); border: 2px solid var(--info); }
+    .bm-waiting { background: var(--surface); border: 2px dashed var(--urgent); }
+    .bm-scoped { background: var(--surface); border: 2px solid var(--border-strong); }
+    .bm-blocked { background: var(--urgent); border: 2px solid var(--urgent); }
+    .bm-unresolved { background: var(--surface); border: 2px dotted var(--text-subtle); cursor: help; }
+    @keyframes bm-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+      50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent); }
+    }
+    .buildmap-step-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1.35;
+    }
+    .buildmap-step-status {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .buildmap-step-sub {
+      font-size: 10px;
+      color: var(--text-subtle);
+      margin-top: 2px;
+    }
+    .buildmap-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 6px;
+    }
+    .buildmap-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .buildmap-legend-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      box-sizing: border-box;
+      flex-shrink: 0;
+    }
+    .buildmap-decisions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .decision-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 11px;
+      border-radius: 14px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .dp-resolved { background: var(--good-bg); color: var(--good); }
+    .dp-dissolved { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border-strong); }
+    .dp-open { background: var(--surface); color: var(--info); border: 1px solid var(--info); }
+    .dp-gate { background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent); font-weight: 600; }
   </style>
 </head>
 <body>
