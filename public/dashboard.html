@@ -1331,7 +1331,7 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     function startBuildMapAutoRefresh() {
       stopBuildMapAutoRefresh();
       buildMapInterval = setInterval(() => {
-        if (currentTab === 'buildmap') renderBuildMap();
+        if (currentTab === 'buildmap') loadBuildMapTab();
       }, 60000);
     }
 
