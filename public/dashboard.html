@@ -1544,6 +1544,243 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     }
 
     // ─────────────────────────────────────────────────────────
+    // Build shelf — queued / in flight / blocked BB- plans, mounted
+    // below the lane map inside the same #buildmap-content element and
+    // refreshed by the same loadBuildMapTab() / 60s interval.
+    // ─────────────────────────────────────────────────────────
+
+    // Split a plan title on the first em-dash (—, U+2014) into an id chip
+    // and a plain title. Titles with no em-dash: no chip, whole title shown.
+    function splitBuildMapTitle(title) {
+      const t = title || '';
+      const idx = t.indexOf('—');
+      if (idx === -1) return { idChip: null, title: t };
+      return { idChip: t.slice(0, idx).trim(), title: t.slice(idx + 1).trim() };
+    }
+
+    // First sentence of a report: take the first paragraph (up to the first
+    // blank line), then the text up to the first ". " (or end-of-string)
+    // inside it. Deliberately NOT split('.')[0] — that truncates mid-word on
+    // abbreviations like "PROTOCOL.md" where the period isn't followed by
+    // whitespace.
+    function firstSentence(report) {
+      if (!report) return null;
+      const firstParagraph = report.split(/\n\s*\n/)[0];
+      const match = firstParagraph.match(/^[\s\S]*?\.(?=\s|$)/);
+      return match ? match[0] : firstParagraph;
+    }
+
+    function buildMapShelfAgeDays(createdAt) {
+      const created = new Date(createdAt).getTime();
+      if (Number.isNaN(created)) return null;
+      return Math.floor((Date.now() - created) / 86400000);
+    }
+
+    function buildMapShelfAgeLabel(days) {
+      if (days === null) return 'unknown age';
+      if (days <= 0) return 'today';
+      if (days === 1) return '1 day';
+      return days + ' days';
+    }
+
+    function isBuildShelfCandidate(plan) {
+      if (!['queued', 'running', 'blocked'].includes(plan.status)) return false;
+      const titleIsBB = typeof plan.title === 'string' && plan.title.startsWith('BB-');
+      const tagged = Array.isArray(plan.tags) && plan.tags.includes('build-brief');
+      return titleIsBB || tagged;
+    }
+
+    function shelfBadge(cls, text) {
+      return '<span class="badge ' + cls + '">' + escapeHtml(text) + '</span>';
+    }
+
+    function buildMapShelfRow(plan, opts) {
+      opts = opts || {};
+      const { idChip, title } = splitBuildMapTitle(plan.title);
+      const ageLabel = buildMapShelfAgeLabel(buildMapShelfAgeDays(plan.created_at));
+      let html = '<div class="item' + (opts.rowClass ? ' ' + opts.rowClass : '') + '">';
+      html += '<div class="item-title">' + formatDisplayId(idChip) + escapeHtml(title) + '</div>';
+      html += '<div class="item-meta">';
+      html += '<span class="tag">' + escapeHtml(plan.project) + '</span>';
+      html += '<span>' + escapeHtml(ageLabel) + '</span>';
+      if (opts.badge) html += opts.badge;
+      html += '</div>';
+      if (opts.bodyLine) {
+        html += '<div class="item-body" style="margin-top:6px;">' + opts.bodyLine + '</div>';
+      }
+      html += '</div>';
+      return html;
+    }
+
+    function buildMapShelfGroup(title, subtitle, items, emptyText, rowRenderer) {
+      let html = '<div class="buildmap-shelf-group">';
+      html += '<h3 class="buildmap-shelf-group-title">' + escapeHtml(title) + ' <span class="count">' + items.length + '</span></h3>';
+      html += '<div class="buildmap-shelf-group-sub">' + escapeHtml(subtitle) + '</div>';
+      if (items.length === 0) {
+        html += '<div class="empty">' + escapeHtml(emptyText) + '</div>';
+      } else {
+        items.forEach((item, i) => { html += rowRenderer(item, i); });
+      }
+      html += '</div>';
+      return html;
+    }
+
+    // Render the Build shelf card. Reads plan data from the SAME plansCache
+    // loadBuildMapTab already built with one list_plans-per-project sweep —
+    // no second sweep here. The one extra read this makes is get_plan per
+    // blocked shelf item, because list_plans does not return executor_report
+    // (only the single-plan get_plan call does) and the blocked-reason line
+    // needs it; that set is small (typically 0-3 plans) and read-only.
+    async function renderShelfSection(plansCache) {
+      const allPlans = [];
+      Object.keys(plansCache).forEach(slug => {
+        const entry = plansCache[slug];
+        if (!entry || entry.error || !entry.plans) return;
+        entry.plans.forEach(p => allPlans.push(Object.assign({}, p, { project: slug })));
+      });
+
+      const candidates = allPlans.filter(isBuildShelfCandidate);
+      const byCreatedAsc = (a, b) => new Date(a.created_at) - new Date(b.created_at);
+      const queued = candidates.filter(p => p.status === 'queued').sort(byCreatedAsc);
+      const running = candidates.filter(p => p.status === 'running').sort(byCreatedAsc);
+      const blocked = candidates.filter(p => p.status === 'blocked').sort(byCreatedAsc);
+
+      const blockedReports = {};
+      await Promise.all(blocked.map(async p => {
+        try {
+          const full = await callMcp('get_plan', { plan_id: p.id });
+          blockedReports[p.id] = full.executor_report || null;
+        } catch (e) {
+          blockedReports[p.id] = null;
+        }
+      }));
+
+      let html = '<div class="card">';
+      html += '<h2>Build shelf</h2>';
+      html += '<div class="buildmap-summary">';
+      html += '<div class="buildmap-summary-stat"><strong>' + queued.length + '</strong> queued · <strong>' + running.length + '</strong> in flight · <strong>' + blocked.length + '</strong> blocked</div>';
+      html += '</div>';
+
+      html += buildMapShelfGroup('Next up', 'oldest queued brief, claimed next', queued, 'Nothing queued.', (p, i) => {
+        const badge = i === 0 ? shelfBadge('badge-normal', 'Next up') : '';
+        return buildMapShelfRow(p, { badge });
+      });
+
+      html += buildMapShelfGroup('In flight', 'currently being built', running, 'Nothing in flight.', p => {
+        const ageDays = buildMapShelfAgeDays(p.created_at);
+        const stale = ageDays !== null && ageDays > 14;
+        const badge = stale ? shelfBadge('badge-warn', 'stale') : '';
+        return buildMapShelfRow(p, { rowClass: stale ? 'buildmap-shelf-row-stale' : '', badge });
+      });
+
+      html += buildMapShelfGroup('Blocked', 'needs something before it can continue', blocked, 'Nothing blocked.', p => {
+        const sentence = firstSentence(blockedReports[p.id]);
+        const reasonText = sentence || '(no report)';
+        const waitingOnCharles = !!sentence && /charles|only he|web-ui|credential/i.test(sentence);
+        const badge = waitingOnCharles ? shelfBadge('badge-urgent', 'waiting on you') : shelfBadge('badge-muted', 'blocked');
+        return buildMapShelfRow(p, { badge, bodyLine: escapeHtml(reasonText) });
+      });
+
+      html += '</div>';
+      return html;
+    }
+
+    // Fetches everything the Build Map tab needs — the lane map's skeleton
+    // plan + referenced project state, and the shelf's plan sweep — sharing
+    // ONE list_plans-per-project cache between both sections instead of each
+    // doing its own independent sweep.
+    async function loadBuildMapTab() {
+      const el = document.getElementById('buildmap-content');
+      el.innerHTML = '<div class="loading">Loading...</div>';
+      try {
+        // (a) every project slug.
+        const allProjects = await callMcp('list_projects', {});
+
+        // (b) one list_plans call per project — the shared cache.
+        const plansCache = {};
+        await Promise.all((allProjects || []).map(async proj => {
+          try {
+            plansCache[proj.slug] = await callMcp('list_plans', { project_slug: proj.slug });
+          } catch (e) {
+            plansCache[proj.slug] = { error: e.message, plans: [] };
+          }
+        }));
+
+        // (c) skeleton plan — same as before.
+        const planResult = await callMcp('get_plan', { plan_id: BUILD_MAP_PLAN_ID });
+        let skeleton;
+        try {
+          skeleton = JSON.parse(planResult.content);
+        } catch (parseErr) {
+          throw new Error('Build map skeleton plan content is not valid JSON: ' + parseErr.message);
+        }
+        const lanes = skeleton.lanes || [];
+        const decisionQueue = skeleton.decision_queue || [];
+
+        // Distinct project slugs referenced by non-manual evidence.
+        const slugs = new Set();
+        lanes.forEach(lane => {
+          (lane.steps || []).forEach(step => {
+            const ev = step.evidence;
+            if (ev && ev.project && ev.type && ev.type !== 'manual') {
+              slugs.add(ev.project);
+            }
+          });
+        });
+
+        // (d) get_project_state only for those referenced slugs.
+        const stateCache = {};
+        await Promise.all(Array.from(slugs).map(async slug => {
+          try {
+            stateCache[slug] = await callMcp('get_project_state', { project_slug: slug });
+          } catch (e) {
+            stateCache[slug] = { error: e.message };
+          }
+        }));
+
+        // (e) Adapt into the { state, plans } shape resolveBuildMapStep
+        // already expects — plans now sourced from the shared plansCache
+        // above instead of a second per-render list_plans call.
+        const projectCache = {};
+        slugs.forEach(slug => {
+          const stateEntry = stateCache[slug];
+          const plansEntry = plansCache[slug];
+          const err = (stateEntry && stateEntry.error) || (plansEntry && plansEntry.error) ||
+            (!plansEntry ? 'no plans fetched for project "' + slug + '"' : null);
+          projectCache[slug] = err ? { error: err } : { state: stateEntry, plans: plansEntry };
+        });
+
+        // Resolve every step's status — unchanged resolution logic.
+        let doneCount = 0;
+        let totalCount = 0;
+        const buildingNow = [];
+        let waitingOnYouCount = 0;
+        const resolvedLanes = lanes.map(lane => {
+          const steps = (lane.steps || []).map(step => {
+            const resolved = resolveBuildMapStep(step, projectCache);
+            totalCount++;
+            if (resolved.status === 'done') doneCount++;
+            if (resolved.status === 'building-now') buildingNow.push(step.label);
+            if (resolved.status === 'waiting-on-you') waitingOnYouCount++;
+            return { step, resolved };
+          });
+          return { lane, steps };
+        });
+
+        const mapHtml = renderBuildMapHtml(resolvedLanes, decisionQueue, {
+          doneCount, totalCount, buildingNow, waitingOnYouCount,
+        });
+
+        // (f) shelf, sharing plansCache — rendered second, mounted below the map.
+        const shelfHtml = await renderShelfSection(plansCache);
+
+        el.innerHTML = mapHtml + shelfHtml;
+      } catch (e) {
+        el.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
     // About tab — render the embedded doc
     // ─────────────────────────────────────────────────────────
     function renderAbout() {
