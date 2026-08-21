@@ -1150,6 +1150,243 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     }
 
     // ─────────────────────────────────────────────────────────
+    // Build Map tab
+    // ─────────────────────────────────────────────────────────
+    const BUILD_MAP_PLAN_ID = '076b64ca-3879-4a9e-b0e3-95c1c435ec6f';
+    let buildMapInterval = null;
+
+    const BUILD_MAP_STATUS_LABEL = {
+      'done': 'Done',
+      'building-now': 'Building now',
+      'on-the-shelf': 'On the shelf',
+      'waiting-on-you': 'Waiting on you',
+      'not-yet-scoped': 'Not yet scoped',
+      'blocked': 'Blocked',
+    };
+
+    function stopBuildMapAutoRefresh() {
+      if (buildMapInterval) {
+        clearInterval(buildMapInterval);
+        buildMapInterval = null;
+      }
+    }
+
+    function startBuildMapAutoRefresh() {
+      stopBuildMapAutoRefresh();
+      buildMapInterval = setInterval(() => {
+        if (currentTab === 'buildmap') renderBuildMap();
+      }, 60000);
+    }
+
+    function buildMapDotClass(status) {
+      switch (status) {
+        case 'done': return 'bm-done';
+        case 'building-now': return 'bm-building';
+        case 'on-the-shelf': return 'bm-shelf';
+        case 'waiting-on-you': return 'bm-waiting';
+        case 'not-yet-scoped': return 'bm-scoped';
+        case 'blocked': return 'bm-blocked';
+        default: return 'bm-unresolved';
+      }
+    }
+
+    // Resolve a single skeleton step's status against cached project data.
+    // projectCache is keyed by project slug: { state, plans } or { error }.
+    function resolveBuildMapStep(step, projectCache) {
+      const ev = step.evidence;
+      if (!ev) {
+        return { status: 'not-yet-scoped' };
+      }
+      if (ev.type === 'manual') {
+        return { status: ev.status || 'not-yet-scoped' };
+      }
+      if (!ev.ref) {
+        return { status: 'not-yet-scoped' };
+      }
+      const cached = ev.project ? projectCache[ev.project] : null;
+      if (!cached || cached.error) {
+        const suffix = cached && cached.error ? ' (project fetch error)' : '';
+        return { status: 'unresolved', reason: ev.type + ' ' + ev.ref + ' on ' + (ev.project || '?') + suffix };
+      }
+      if (ev.type === 'plan') {
+        const plans = (cached.plans && cached.plans.plans) || [];
+        const plan = plans.find(p => p.id === ev.ref);
+        if (!plan) {
+          return { status: 'unresolved', reason: 'plan ' + ev.ref + ' on ' + ev.project };
+        }
+        const statusMap = {
+          succeeded: 'done',
+          running: 'building-now',
+          queued: 'on-the-shelf',
+          blocked: 'blocked',
+          failed: 'blocked',
+        };
+        return { status: statusMap[plan.status] || 'not-yet-scoped' };
+      }
+      if (ev.type === 'decision') {
+        const decisions = (cached.state && cached.state.active_decisions) || [];
+        const found = decisions.find(d => d.display_id === ev.ref);
+        if (found) return { status: 'done' };
+        return { status: 'unresolved', reason: 'decision ' + ev.ref + ' on ' + ev.project };
+      }
+      if (ev.type === 'next_move') {
+        const moves = (cached.state && cached.state.open_next_moves) || [];
+        const found = moves.find(m => m.display_id === ev.ref);
+        if (found) {
+          const needsCharles = step.waiting_on_charles === true ||
+            (Array.isArray(found.tags) && found.tags.includes('needs-charles'));
+          return { status: needsCharles ? 'waiting-on-you' : 'on-the-shelf' };
+        }
+        // Not in open_next_moves — this surface only exposes open next moves,
+        // so "not open" is treated as completed.
+        return { status: 'done' };
+      }
+      return { status: 'unresolved', reason: 'unknown evidence type "' + ev.type + '" for ' + ev.ref + ' on ' + (ev.project || '?') };
+    }
+
+    function renderBuildMapHtml(resolvedLanes, decisionQueue, summary) {
+      let html = '';
+
+      html += '<div class="card">';
+      html += '<h2>Build map summary</h2>';
+      html += '<div class="buildmap-summary">';
+      html += '<div class="buildmap-summary-stat"><strong>' + summary.doneCount + ' / ' + summary.totalCount + '</strong> done</div>';
+      if (summary.buildingNow.length > 0) {
+        html += '<div class="buildmap-summary-stat">Building now: ' + summary.buildingNow.map(l => escapeHtml(l)).join(', ') + '</div>';
+      } else {
+        html += '<div class="buildmap-summary-stat">Nothing building right now</div>';
+      }
+      html += '<div class="buildmap-summary-stat"><strong>' + summary.waitingOnYouCount + '</strong> waiting on you</div>';
+      html += '</div>';
+      html += '</div>';
+
+      html += '<div class="card">';
+      html += '<h2>Lanes</h2>';
+      html += '<div class="buildmap-lanes">';
+      resolvedLanes.forEach(({ lane, steps }) => {
+        html += '<div>';
+        html += '<div class="buildmap-lane-label">' + escapeHtml(lane.id || '') + (lane.id ? ' — ' : '') + escapeHtml(lane.name || '') + '</div>';
+        html += '<div class="buildmap-track">';
+        steps.forEach(({ step, resolved }) => {
+          const dotClass = buildMapDotClass(resolved.status);
+          const statusWord = BUILD_MAP_STATUS_LABEL[resolved.status] || 'Unresolved';
+          const titleAttr = resolved.reason ? ' title="unresolved: ' + escapeHtml(resolved.reason) + '"' : '';
+          html += '<div class="buildmap-step"' + titleAttr + '>';
+          html += '<div class="buildmap-dot ' + dotClass + '"></div>';
+          html += '<div class="buildmap-step-label">' + escapeHtml(step.label || '') + '</div>';
+          html += '<div class="buildmap-step-status">' + escapeHtml(statusWord) + '</div>';
+          if (step.sub) {
+            html += '<div class="buildmap-step-sub">(' + escapeHtml(step.sub) + ')</div>';
+          }
+          html += '</div>';
+        });
+        html += '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+
+      html += '<div class="buildmap-legend">';
+      [
+        ['bm-done', 'Done'],
+        ['bm-building', 'Building now'],
+        ['bm-shelf', 'On the shelf'],
+        ['bm-waiting', 'Waiting on you'],
+        ['bm-scoped', 'Not yet scoped'],
+        ['bm-blocked', 'Blocked'],
+        ['bm-unresolved', 'Unresolved / error'],
+      ].forEach(([cls, label]) => {
+        html += '<div class="buildmap-legend-item"><span class="buildmap-legend-dot ' + cls + '"></span>' + escapeHtml(label) + '</div>';
+      });
+      html += '</div>';
+      html += '</div>'; // end lanes card
+
+      html += '<div class="card">';
+      html += '<h2>Decision queue <span class="count">' + decisionQueue.length + '</span></h2>';
+      if (decisionQueue.length === 0) {
+        html += '<div class="empty">No decisions queued.</div>';
+      } else {
+        html += '<div class="buildmap-decisions">';
+        decisionQueue.forEach(d => {
+          const pillClass = ({
+            resolved: 'dp-resolved',
+            dissolved: 'dp-dissolved',
+            open: 'dp-open',
+            gate: 'dp-gate',
+          })[d.status] || 'dp-open';
+          html += '<span class="decision-pill ' + pillClass + '">' + escapeHtml(d.id) + ' — ' + escapeHtml(d.label) + '</span>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+
+      return html;
+    }
+
+    async function renderBuildMap() {
+      const el = document.getElementById('buildmap-content');
+      el.innerHTML = '<div class="loading">Loading...</div>';
+      try {
+        const planResult = await callMcp('get_plan', { plan_id: BUILD_MAP_PLAN_ID });
+        let skeleton;
+        try {
+          skeleton = JSON.parse(planResult.content);
+        } catch (parseErr) {
+          throw new Error('Build map skeleton plan content is not valid JSON: ' + parseErr.message);
+        }
+        const lanes = skeleton.lanes || [];
+        const decisionQueue = skeleton.decision_queue || [];
+
+        // Distinct project slugs referenced by non-manual evidence.
+        const slugs = new Set();
+        lanes.forEach(lane => {
+          (lane.steps || []).forEach(step => {
+            const ev = step.evidence;
+            if (ev && ev.project && ev.type && ev.type !== 'manual') {
+              slugs.add(ev.project);
+            }
+          });
+        });
+
+        // Fetch + cache project state + plans for each distinct slug, once each.
+        const projectCache = {};
+        await Promise.all(Array.from(slugs).map(async slug => {
+          try {
+            const [state, plans] = await Promise.all([
+              callMcp('get_project_state', { project_slug: slug }),
+              callMcp('list_plans', { project_slug: slug }),
+            ]);
+            projectCache[slug] = { state, plans };
+          } catch (e) {
+            projectCache[slug] = { error: e.message };
+          }
+        }));
+
+        // Resolve every step's status.
+        let doneCount = 0;
+        let totalCount = 0;
+        const buildingNow = [];
+        let waitingOnYouCount = 0;
+        const resolvedLanes = lanes.map(lane => {
+          const steps = (lane.steps || []).map(step => {
+            const resolved = resolveBuildMapStep(step, projectCache);
+            totalCount++;
+            if (resolved.status === 'done') doneCount++;
+            if (resolved.status === 'building-now') buildingNow.push(step.label);
+            if (resolved.status === 'waiting-on-you') waitingOnYouCount++;
+            return { step, resolved };
+          });
+          return { lane, steps };
+        });
+
+        el.innerHTML = renderBuildMapHtml(resolvedLanes, decisionQueue, {
+          doneCount, totalCount, buildingNow, waitingOnYouCount,
+        });
+      } catch (e) {
+        el.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
     // About tab — render the embedded doc
     // ─────────────────────────────────────────────────────────
     function renderAbout() {
