@@ -1571,9 +1571,10 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     }
 
     // ─────────────────────────────────────────────────────────
-    // Build shelf — queued / in flight / blocked BB- plans, mounted
-    // below the lane map inside the same #buildmap-content element and
-    // refreshed by the same loadBuildMapTab() / 60s interval.
+    // Build shelf — queued / in flight / blocked BB- plans, rendered on
+    // its own Build Shelf tab (program-section split). Reads plan data
+    // from the SAME plansCache the shared sweep produces, so this and
+    // the Build Map tab never each do an independent list_plans sweep.
     // ─────────────────────────────────────────────────────────
 
     // Split a plan title on the first em-dash (—, U+2014) into an id chip
