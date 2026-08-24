@@ -1878,12 +1878,16 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     let currentTab = 'overview';
 
     async function loadCurrentTab() {
-      if (!currentProject && currentTab !== 'about') return;
+      const programTab = isProgramTab(currentTab);
+      if (!currentProject && currentTab !== 'about' && !programTab) return;
+      const selectorEl = document.getElementById('project-selector');
+      if (selectorEl) selectorEl.style.visibility = programTab ? 'hidden' : 'visible';
       clearError();
-      if (currentTab !== 'buildmap') stopBuildMapAutoRefresh();
+      if (!programTab) stopProgramTabAutoRefresh();
       switch (currentTab) {
         case 'overview': await renderOverview(); break;
-        case 'buildmap': await loadBuildMapTab(); startBuildMapAutoRefresh(); break;
+        case 'buildmap': await loadBuildMapTab(); startProgramTabAutoRefresh(); break;
+        case 'buildshelf': await loadBuildShelfTab(); startProgramTabAutoRefresh(); break;
         case 'decisions': await renderDecisions(); break;
         case 'assumptions': await renderAssumptions(); break;
         case 'plans': await renderPlans(); break;
