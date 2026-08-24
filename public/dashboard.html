@@ -1733,9 +1733,10 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       });
 
       html += buildMapShelfGroup('Blocked', 'needs something before it can continue', blocked, 'Nothing blocked.', p => {
-        const sentence = firstSentence(blockedReports[p.id]);
-        const reasonText = sentence || '(no report)';
-        const waitingOnCharles = !!sentence && /charles|only he|web-ui|credential/i.test(sentence);
+        const report = blockedReports[p.id];
+        const reasonSentence = findBlockedReasonSentence(report);
+        const reasonText = reasonSentence || firstSentence(report) || '(no report)';
+        const waitingOnCharles = !!reasonSentence;
         const badge = waitingOnCharles ? shelfBadge('badge-urgent', 'waiting on you') : shelfBadge('badge-muted', 'blocked');
         return buildMapShelfRow(p, { badge, bodyLine: escapeHtml(reasonText) });
       });
