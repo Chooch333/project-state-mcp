@@ -1598,6 +1598,37 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       return match ? match[0] : firstParagraph;
     }
 
+    // Every sentence in a report, full text (not just the first paragraph).
+    // Same ". " boundary rule as firstSentence, applied repeatedly — safe on
+    // abbreviations like "PROTOCOL.md" for the same reason.
+    function splitSentences(report) {
+      const sentences = [];
+      let remaining = report || '';
+      const re = /^[\s\S]*?\.(?=\s|$)/;
+      while (remaining.trim()) {
+        const m = remaining.match(re);
+        if (!m) { sentences.push(remaining.trim()); break; }
+        sentences.push(m[0].trim());
+        remaining = remaining.slice(m[0].length).replace(/^\s+/, '');
+      }
+      return sentences;
+    }
+
+    // CD-J-004 fix: the old rule checked only the FIRST sentence, which
+    // misfired both ways on the two real blocked briefs — a generic opening
+    // sentence can mention "Charles" without stating the block (second-
+    // opinion-routine), and the true reason can appear with no first-
+    // sentence signal at all (youtube-transcript-conduit). Every executor
+    // report that reaches `blocked` status does so at a hard gate (per
+    // PROTOCOL.md, only credentials/money/destructive-data halt a build,
+    // all Charles-only), and build chats name that moment explicitly with
+    // the word "blocked" somewhere in the report — so scan the FULL report,
+    // in sentence order, for the first sentence that actually says so.
+    function findBlockedReasonSentence(report) {
+      const sentences = splitSentences(report);
+      return sentences.find(s => /\bblocked\b/i.test(s)) || null;
+    }
+
     function buildMapShelfAgeDays(createdAt) {
       const created = new Date(createdAt).getTime();
       if (Number.isNaN(created)) return null;
