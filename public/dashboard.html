@@ -1337,7 +1337,7 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     // Build Map tab
     // ─────────────────────────────────────────────────────────
     const BUILD_MAP_PLAN_ID = '076b64ca-3879-4a9e-b0e3-95c1c435ec6f';
-    let buildMapInterval = null;
+    let programTabInterval = null;
 
     const BUILD_MAP_STATUS_LABEL = {
       'done': 'Done',
@@ -1348,17 +1348,22 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       'blocked': 'Blocked',
     };
 
-    function stopBuildMapAutoRefresh() {
-      if (buildMapInterval) {
-        clearInterval(buildMapInterval);
-        buildMapInterval = null;
+    function isProgramTab(tab) {
+      return tab === 'buildmap' || tab === 'buildshelf';
+    }
+
+    function stopProgramTabAutoRefresh() {
+      if (programTabInterval) {
+        clearInterval(programTabInterval);
+        programTabInterval = null;
       }
     }
 
-    function startBuildMapAutoRefresh() {
-      stopBuildMapAutoRefresh();
-      buildMapInterval = setInterval(() => {
+    function startProgramTabAutoRefresh() {
+      stopProgramTabAutoRefresh();
+      programTabInterval = setInterval(() => {
         if (currentTab === 'buildmap') loadBuildMapTab();
+        else if (currentTab === 'buildshelf') loadBuildShelfTab();
       }, 60000);
     }
 
