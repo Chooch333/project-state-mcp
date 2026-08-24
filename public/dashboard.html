@@ -1848,10 +1848,7 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
           doneCount, totalCount, buildingNow, waitingOnYouCount,
         });
 
-        // (f) shelf, sharing plansCache — rendered second, mounted below the map.
-        const shelfHtml = await renderShelfSection(plansCache);
-
-        el.innerHTML = mapHtml + shelfHtml;
+        el.innerHTML = mapHtml;
       } catch (e) {
         el.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
       }
