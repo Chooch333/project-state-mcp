@@ -1745,26 +1745,43 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       return html;
     }
 
+    // Shared sweep — one list_plans call per project — used by both Program
+    // tabs: the Build Map tab's lane-evidence resolution and the Build
+    // Shelf tab's queue. Neither tab does its own independent sweep.
+    async function sweepAllProjectPlans() {
+      const allProjects = await callMcp('list_projects', {});
+      const plansCache = {};
+      await Promise.all((allProjects || []).map(async proj => {
+        try {
+          plansCache[proj.slug] = await callMcp('list_plans', { project_slug: proj.slug });
+        } catch (e) {
+          plansCache[proj.slug] = { error: e.message, plans: [] };
+        }
+      }));
+      return plansCache;
+    }
+
+    // Build Shelf tab — its own panel; shares the sweep above with Build Map.
+    async function loadBuildShelfTab() {
+      const el = document.getElementById('buildshelf-content');
+      el.innerHTML = '<div class="loading">Loading...</div>';
+      try {
+        const plansCache = await sweepAllProjectPlans();
+        el.innerHTML = await renderShelfSection(plansCache);
+      } catch (e) {
+        el.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
     // Fetches everything the Build Map tab needs — the lane map's skeleton
-    // plan + referenced project state, and the shelf's plan sweep — sharing
-    // ONE list_plans-per-project cache between both sections instead of each
-    // doing its own independent sweep.
+    // plan + referenced project state — sharing the sweep above with the
+    // Build Shelf tab instead of each doing its own independent sweep.
     async function loadBuildMapTab() {
       const el = document.getElementById('buildmap-content');
       el.innerHTML = '<div class="loading">Loading...</div>';
       try {
-        // (a) every project slug.
-        const allProjects = await callMcp('list_projects', {});
-
-        // (b) one list_plans call per project — the shared cache.
-        const plansCache = {};
-        await Promise.all((allProjects || []).map(async proj => {
-          try {
-            plansCache[proj.slug] = await callMcp('list_plans', { project_slug: proj.slug });
-          } catch (e) {
-            plansCache[proj.slug] = { error: e.message, plans: [] };
-          }
-        }));
+        // (a)+(b) shared sweep — every project + one list_plans call each.
+        const plansCache = await sweepAllProjectPlans();
 
         // (c) skeleton plan — same as before.
         const planResult = await callMcp('get_plan', { plan_id: BUILD_MAP_PLAN_ID });
