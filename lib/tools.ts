@@ -566,6 +566,17 @@ export const TOOLS = [
     },
   },
   {
+    name: 'list_questions',
+    description: 'List BLOCKING questions from the build-to-Charles Q-channel — the questions lane (origin build/charles-directed), whose statuses run open → answered/discussing → resolved. Defaults to the active queue (open + discussing); pass status="all" for the full history, or an exact status to filter. project_slug is OPTIONAL here, unlike the other list tools: omit it to read the blocking queue across every project in one call, and every row comes back labeled with its own project_slug. NEVER returns disclosures (origin build-judgment) — those are a separate, born-non-blocking channel with its own reader, list_judgment_calls; use that tool, not this one, for the "Calls to review" inbox.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_slug: { type: 'string', description: 'Optional — omit to query across all projects.' },
+        status: { type: 'string', description: 'Filter by status: omit for open+discussing (default, the active queue), or pass open/answered/discussing/resolved/all.' },
+      },
+    },
+  },
+  {
     name: 'dispose_judgment_call',
     description: 'Mark a disclosure reviewed: reviewed-agree (a DA chat looked, concurs, nothing more to do) or reviewed-corrected (a DA chat disagreed and logged a correcting Decision — linked_decision is required in that case, mirroring the resolve-needs-decision rule on blocking questions). Appends a message to the disclosure\'s thread recording what the reviewer did. Operates only on build-judgment-origin rows.',
     inputSchema: {
