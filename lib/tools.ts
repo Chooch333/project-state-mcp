@@ -471,7 +471,7 @@ export const TOOLS = [
   },
   {
     name: 'post_judgment_call',
-    description: 'Post a disclosure to the build-to-Charles Q-channel: something a build chat wants Charles to see that is neither a blocking question nor a clean "done, nothing to flag" close — a judgment call made on its own authority, a loose end, an FYI. Returns a prefixed display_id (e.g. CBR-J-003) to hand to Charles, who can carry it into a design-assist chat for optional, non-blocking review. Always bound to the originating build brief via plan_id. Distinct from the blocking-question Q-channel (open/answered/discussing/resolved) — disclosures are born already non-blocking (status noted) and never gate a build or a DA session start.',
+    description: 'Post a disclosure to the build-to-Charles Q-channel: something a build chat wants Charles to see that is neither a blocking question nor a clean "done, nothing to flag" close — a judgment call made on its own authority, a loose end, an FYI. Returns a prefixed display_id (e.g. CBR-J-003) to hand to Charles, who can carry it into a design-assist chat for optional, non-blocking review. Always bound to the originating build brief via plan_id. Distinct from the blocking-question Q-channel (open/answered/discussing/resolved) — disclosures are born already non-blocking (status noted) and never gate a build or a DA session start. Also accepts optional plain_summary (one plain-English sentence for Charles) and action_needed (needs-charles / needs-design-check / fyi). Soft enforcement, never a rejection: action_needed defaults to "fyi" if omitted or unrecognized, and if plain_summary is omitted the response carries an additional warning string addressed to the calling chat (never to Charles) asking it to supply its own best-shot plain sentence next time. A campaign-related disclosure (a DA/planning chat renaming, recategorizing, or forking a campaign) is exactly the kind of thing this tool exists for — campaigns are DA-chat authority and Charles is never asked to approve the change itself, only informed of it here if the chat judges it worth a note.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -481,6 +481,8 @@ export const TOOLS = [
         context: { type: 'string', description: 'The what/why/what-it-touched, in plain English.' },
         tags: { type: 'array', items: { type: 'string' }, description: '"judgment-call" is always added automatically; pass additional tags here.' },
         asked_by: { type: 'string', description: 'Optional identifier for the posting build chat/session.' },
+        plain_summary: { type: 'string', description: 'One-sentence plain-English summary of this disclosure, for Charles. Optional but encouraged — omitting it never rejects the call, just triggers a soft warning in the response.' },
+        action_needed: { type: 'string', enum: ['needs-charles', 'needs-design-check', 'fyi'], description: 'What kind of attention this disclosure needs. Defaults to "fyi" if omitted or unrecognized — never rejected for a missing value.' },
       },
       required: ['project_slug', 'plan_id', 'title', 'context'],
     },
