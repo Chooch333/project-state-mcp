@@ -1988,13 +1988,14 @@ async function createCampaign(supabase: SupabaseClient, args: Args): Promise<str
     slug: args.slug.trim(),
     title: args.title.trim(),
     purpose: (typeof args.purpose === 'string' && args.purpose.trim().length > 0) ? args.purpose.trim() : null,
+    layer: (typeof args.layer === 'string' && args.layer.trim().length > 0) ? args.layer.trim() : null,
   };
   if (typeof args.sort_order === 'number') insertRow.sort_order = args.sort_order;
 
   const { data, error } = await supabase
     .from('campaigns')
     .insert(insertRow)
-    .select('id, slug, title, purpose, sort_order, status, created_at, updated_at')
+    .select('id, slug, title, purpose, layer, sort_order, status, created_at, updated_at')
     .single();
   if (error) {
     if (error.code === '23505') {
