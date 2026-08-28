@@ -2529,9 +2529,11 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     });
     // Defensive: if a machine-room tab is already active when the page
     // loads, expand the container so its own button isn't hidden. Collapsed
-    // is still the default — currentTab is 'overview' with no persistence
-    // across reloads, and this defensive check runs before any other tab is
-    // ever selected in this page instance.
+    // is still the default — currentTab is 'buildshelf' (a Program tab, not
+    // in MACHINE_ROOM_TABS) with no persistence across reloads, so this is
+    // inert on a normal load. It only matters for a future path that could
+    // set currentTab to a machine-room tab before this line runs (e.g.
+    // hash-based deep-linking, not implemented today).
     setMachineRoomExpanded(MACHINE_ROOM_TABS.includes(currentTab));
 
     document.getElementById('project-selector').addEventListener('change', (e) => {
