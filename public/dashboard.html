@@ -2077,39 +2077,51 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       }
     }
 
-    // Fetches everything the Build Map tab needs — the lane map's skeleton
-    // plan + referenced project state — sharing the sweep above with the
-    // Build Shelf tab instead of each doing its own independent sweep.
+    // Fetches everything the Build Map tab needs — Map v2
+    // (BB-2026-08-27-comms-hub-faces): campaigns + the campaign-keyed
+    // skeleton plan's milestones + referenced project state for milestone
+    // evidence, sharing the plan sweep above with the Build Shelf tab
+    // instead of doing an independent one. Unlike the Shelf, build-plan
+    // nodes here come from EVERY status in the sweep, not just Shelf
+    // candidates — the Map shows the full campaign picture.
     async function loadBuildMapTab() {
       const el = document.getElementById('buildmap-content');
       el.innerHTML = '<div class="loading">Loading...</div>';
       try {
-        // (a)+(b) shared sweep — every project + one list_plans call each.
-        const plansCache = await sweepAllProjectPlans();
+        // Shared sweep — every project + one list_plans call each, enriched
+        // with campaign_id/plain_title/etc — plus campaigns + the skeleton
+        // plan, all in parallel.
+        const [plansCache, campaignsResult, planResult] = await Promise.all([
+          sweepAllProjectPlans(),
+          loadCampaignsCache(),
+          callMcp('get_plan', { plan_id: BUILD_MAP_PLAN_ID }),
+        ]);
+        const campaigns = (campaignsResult && campaignsResult.campaigns) || [];
 
-        // (c) skeleton plan — same as before.
-        const planResult = await callMcp('get_plan', { plan_id: BUILD_MAP_PLAN_ID });
         let skeleton;
         try {
           skeleton = JSON.parse(planResult.content);
         } catch (parseErr) {
           throw new Error('Build map skeleton plan content is not valid JSON: ' + parseErr.message);
         }
-        const lanes = skeleton.lanes || [];
+        // v2 shape: skeleton.campaigns[slug] = [{label, summary, evidence,
+        // waiting_on_charles}, ...] — the old skeleton.lanes (L0-L4, one
+        // fixed platform-layer pipeline) is gone.
+        const skeletonCampaigns = skeleton.campaigns || {};
         const decisionQueue = skeleton.decision_queue || [];
 
-        // Distinct project slugs referenced by non-manual evidence.
+        // Distinct project slugs referenced by non-manual milestone evidence.
         const slugs = new Set();
-        lanes.forEach(lane => {
-          (lane.steps || []).forEach(step => {
-            const ev = step.evidence;
+        Object.keys(skeletonCampaigns).forEach(slug => {
+          (skeletonCampaigns[slug] || []).forEach(m => {
+            const ev = m.evidence;
             if (ev && ev.project && ev.type && ev.type !== 'manual') {
               slugs.add(ev.project);
             }
           });
         });
 
-        // (d) get_project_state only for those referenced slugs.
+        // get_project_state only for those referenced slugs.
         const stateCache = {};
         await Promise.all(Array.from(slugs).map(async slug => {
           try {
@@ -2119,9 +2131,10 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
           }
         }));
 
-        // (e) Adapt into the { state, plans } shape resolveBuildMapStep
-        // already expects — plans now sourced from the shared plansCache
-        // above instead of a second per-render list_plans call.
+        // Adapt into the { state, plans } shape resolveBuildMapStep expects
+        // — plans sourced from the shared plansCache above, same pattern v1
+        // used, kept in case a future skeleton edit reintroduces plan-type
+        // evidence (the current skeleton uses none).
         const projectCache = {};
         slugs.forEach(slug => {
           const stateEntry = stateCache[slug];
@@ -2131,28 +2144,61 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
           projectCache[slug] = err ? { error: err } : { state: stateEntry, plans: plansEntry };
         });
 
-        // Resolve every step's status — unchanged resolution logic.
+        // Flatten every plan from every project (any status — not filtered
+        // to Shelf candidates), same flattening pattern renderShelfSection
+        // uses, so campaign_id lookups below see the full set.
+        const allPlans = [];
+        Object.keys(plansCache).forEach(slug => {
+          const entry = plansCache[slug];
+          if (!entry || entry.error || !entry.plans) return;
+          entry.plans.forEach(p => allPlans.push(Object.assign({}, p, { project: slug })));
+        });
+
+        const byCreatedAsc = (a, b) => new Date(a.created_at) - new Date(b.created_at);
+        const activeCampaigns = campaigns.filter(c => c.status === 'active').sort((a, b) => a.sort_order - b.sort_order);
+
+        // One lane per active campaign with at least one milestone or one
+        // build node — a campaign with neither is skipped entirely (no
+        // empty lane). Milestone resolution reuses resolveBuildMapStep
+        // unchanged; the "needs a label" flag is purely about missing
+        // milestone.label text (independent of whether its evidence
+        // resolves) — same asymmetry the Shelf uses for plain_title (name
+        // required, summary optional).
+        const lanes = activeCampaigns.map(c => {
+          const milestones = (skeletonCampaigns[c.slug] || []).map(m => ({
+            milestone: m,
+            resolved: resolveBuildMapStep(m, projectCache),
+            needsLabel: !(m.label && String(m.label).trim()),
+          }));
+          const nodes = allPlans.filter(p => p.campaign_id === c.id).sort(byCreatedAsc);
+          return { campaign: c, milestones, nodes };
+        }).filter(lane => lane.milestones.length > 0 || lane.nodes.length > 0);
+
+        // Summary stats across both milestones and build nodes.
         let doneCount = 0;
         let totalCount = 0;
         const buildingNow = [];
         let waitingOnYouCount = 0;
-        const resolvedLanes = lanes.map(lane => {
-          const steps = (lane.steps || []).map(step => {
-            const resolved = resolveBuildMapStep(step, projectCache);
+        lanes.forEach(lane => {
+          lane.milestones.forEach(({ milestone, resolved }) => {
             totalCount++;
             if (resolved.status === 'done') doneCount++;
-            if (resolved.status === 'building-now') buildingNow.push(step.label);
+            if (resolved.status === 'building-now') buildingNow.push(milestone.label || '(needs a label)');
             if (resolved.status === 'waiting-on-you') waitingOnYouCount++;
-            return { step, resolved };
           });
-          return { lane, steps };
+          lane.nodes.forEach(p => {
+            totalCount++;
+            if (p.status === 'succeeded') doneCount++;
+            if (p.status === 'running') buildingNow.push(p.plain_title || p.title || '(needs a name)');
+          });
         });
 
-        const mapHtml = renderBuildMapHtml(resolvedLanes, decisionQueue, {
+        const mapHtml = renderBuildMapHtml(lanes, decisionQueue, {
           doneCount, totalCount, buildingNow, waitingOnYouCount,
         });
 
         el.innerHTML = mapHtml;
+        wireBuildMapNodeClicks(lanes);
       } catch (e) {
         el.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
       }
