@@ -1865,6 +1865,183 @@ async function listPlans(supabase: SupabaseClient, args: Args): Promise<string> 
 }
 
 // ─────────────────────────────────────────────────────────
+// Plan board labels — rename/recategorize a plan's plain_title,
+// plain_summary, campaign, and designed_in without touching its
+// content or status. BB-2026-08-27-comms-hub-plumbing.
+// ─────────────────────────────────────────────────────────
+
+async function updatePlanLabels(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (!args.plan_id) throw new Error('plan_id is required');
+
+  const update: any = {};
+  if (args.plain_title !== undefined) {
+    update.plain_title = (typeof args.plain_title === 'string' && args.plain_title.trim().length > 0)
+      ? args.plain_title.trim() : null;
+  }
+  if (args.plain_summary !== undefined) {
+    update.plain_summary = (typeof args.plain_summary === 'string' && args.plain_summary.trim().length > 0)
+      ? args.plain_summary.trim() : null;
+  }
+  if (args.designed_in !== undefined) {
+    update.designed_in = (typeof args.designed_in === 'string' && args.designed_in.trim().length > 0)
+      ? args.designed_in.trim() : null;
+  }
+  if (args.campaign !== undefined) {
+    // Empty string or null explicitly clears the campaign. A non-empty slug that does
+    // not resolve is a caller error and fails the call — never silently dropped.
+    if (args.campaign === null || (typeof args.campaign === 'string' && args.campaign.trim().length === 0)) {
+      update.campaign_id = null;
+    } else if (typeof args.campaign === 'string') {
+      update.campaign_id = await resolveCampaignId(supabase, args.campaign.trim());
+    } else {
+      throw new Error('campaign must be a string slug (or empty string/null to clear it)');
+    }
+  }
+
+  if (Object.keys(update).length === 0) {
+    throw new Error('No label fields provided. Pass at least one of plain_title, plain_summary, campaign, designed_in.');
+  }
+
+  const { data, error } = await supabase
+    .from('plans')
+    .update(update)
+    .eq('id', args.plan_id)
+    .select('id, title, status, plain_title, plain_summary, campaign_id, designed_in')
+    .single();
+  if (error) throw new Error(error.message);
+  return JSON.stringify(data, null, 2);
+}
+
+// ─────────────────────────────────────────────────────────
+// Plan review — records a design review on a completed plan.
+// Only valid when the plan's current status is 'succeeded'.
+// BB-2026-08-27-comms-hub-plumbing.
+// ─────────────────────────────────────────────────────────
+
+async function reviewPlan(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (!args.plan_id) throw new Error('plan_id is required');
+  if (typeof args.reviewed_by !== 'string' || args.reviewed_by.trim().length === 0) {
+    throw new Error('reviewed_by is required');
+  }
+
+  const { data: plan, error: fetchErr } = await supabase
+    .from('plans')
+    .select('id, status')
+    .eq('id', args.plan_id)
+    .maybeSingle();
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (!plan) throw new Error(`Plan not found: ${args.plan_id}`);
+  if (plan.status !== 'succeeded') {
+    throw new Error(
+      `review_plan is only valid when the plan's status is 'succeeded' (this plan is '${plan.status}'). ` +
+      'Review fields were NOT set.'
+    );
+  }
+
+  const update = {
+    reviewed_at: new Date().toISOString(),
+    reviewed_by: args.reviewed_by.trim(),
+    review_notes: (typeof args.review_notes === 'string' && args.review_notes.trim().length > 0)
+      ? args.review_notes.trim() : null,
+  };
+
+  const { data, error } = await supabase
+    .from('plans')
+    .update(update)
+    .eq('id', args.plan_id)
+    .select('id, title, status, reviewed_at, reviewed_by, review_notes')
+    .single();
+  if (error) throw new Error(error.message);
+  return JSON.stringify(data, null, 2);
+}
+
+// ─────────────────────────────────────────────────────────
+// Campaigns — board-facing groupings for plans.
+// Campaigns are DA-chat authority: DA/planning chats may create, rename,
+// recategorize, or fork a new campaign out of an existing one freely, at
+// their own discretion. Changes here are logged as judgment calls
+// (post_judgment_call) — Charles is never asked to approve a campaign
+// change. BB-2026-08-27-comms-hub-plumbing.
+// ─────────────────────────────────────────────────────────
+
+async function listCampaigns(supabase: SupabaseClient, _args: Args): Promise<string> {
+  const { data, error } = await supabase
+    .from('campaigns')
+    .select('id, slug, title, purpose, sort_order, status')
+    .order('sort_order', { ascending: true })
+    .order('title', { ascending: true });
+  if (error) throw new Error(error.message);
+  return JSON.stringify({ count: data?.length ?? 0, campaigns: data ?? [] }, null, 2);
+}
+
+async function createCampaign(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (typeof args.slug !== 'string' || args.slug.trim().length === 0) {
+    throw new Error('slug is required');
+  }
+  if (typeof args.title !== 'string' || args.title.trim().length === 0) {
+    throw new Error('title is required');
+  }
+
+  const insertRow: any = {
+    slug: args.slug.trim(),
+    title: args.title.trim(),
+    purpose: (typeof args.purpose === 'string' && args.purpose.trim().length > 0) ? args.purpose.trim() : null,
+  };
+  if (typeof args.sort_order === 'number') insertRow.sort_order = args.sort_order;
+
+  const { data, error } = await supabase
+    .from('campaigns')
+    .insert(insertRow)
+    .select('id, slug, title, purpose, sort_order, status, created_at, updated_at')
+    .single();
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error(`Campaign slug already exists: '${args.slug}'. Use update_campaign to change the existing campaign, or pick a different slug.`);
+    }
+    throw new Error(error.message);
+  }
+  return JSON.stringify(data, null, 2);
+}
+
+async function updateCampaign(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (!args.slug && !args.id) throw new Error('Must provide either slug or id to identify the campaign.');
+
+  let lookup = supabase.from('campaigns').select('id, slug');
+  lookup = args.id ? lookup.eq('id', args.id) : lookup.eq('slug', args.slug);
+  const { data: existing, error: fetchErr } = await lookup.maybeSingle();
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (!existing) throw new Error(`Campaign not found: '${args.id ?? args.slug}'.`);
+
+  const update: any = { updated_at: new Date().toISOString() };
+  if (typeof args.new_slug === 'string' && args.new_slug.trim().length > 0) update.slug = args.new_slug.trim();
+  if (typeof args.title === 'string' && args.title.trim().length > 0) update.title = args.title.trim();
+  if (args.purpose !== undefined) {
+    update.purpose = (typeof args.purpose === 'string' && args.purpose.trim().length > 0) ? args.purpose.trim() : null;
+  }
+  if (typeof args.sort_order === 'number') update.sort_order = args.sort_order;
+  if (args.status !== undefined) {
+    if (!['active', 'done', 'parked'].includes(args.status)) {
+      throw new Error(`status must be one of active/done/parked (got "${args.status}")`);
+    }
+    update.status = args.status;
+  }
+
+  const { data, error } = await supabase
+    .from('campaigns')
+    .update(update)
+    .eq('id', existing.id)
+    .select('id, slug, title, purpose, sort_order, status, created_at, updated_at')
+    .single();
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error(`Campaign slug already exists: '${args.new_slug}'.`);
+    }
+    throw new Error(error.message);
+  }
+  return JSON.stringify(data, null, 2);
+}
+
+// ─────────────────────────────────────────────────────────
 // Status snapshots
 // ─────────────────────────────────────────────────────────
 
