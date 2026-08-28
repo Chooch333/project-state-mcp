@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { getSupabase, resolveProjectId } from './supabase';
+import { getSupabase, resolveProjectId, resolveCampaignId } from './supabase';
 import { embed, toPgVector, composeEmbeddingText } from './embeddings';
 import {
   normalizeTags,
