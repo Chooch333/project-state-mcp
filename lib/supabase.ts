@@ -40,3 +40,24 @@ export async function resolveProjectId(
 
   return data.id;
 }
+
+/**
+ * Look up a campaign by its slug and return the uuid.
+ * Throws with a clear error if not found — an unresolvable campaign slug is a caller
+ * error (typo, stale reference) and must fail the write loudly, never silently drop it.
+ */
+export async function resolveCampaignId(
+  supabase: SupabaseClient,
+  slug: string
+): Promise<string> {
+  const { data, error } = await supabase
+    .from('campaigns')
+    .select('id')
+    .eq('slug', slug)
+    .maybeSingle();
+
+  if (error) throw new Error(`DB error resolving campaign '${slug}': ${error.message}`);
+  if (!data) throw new Error(`Campaign not found: '${slug}'. Use list_campaigns to see available slugs, or create_campaign to create it.`);
+
+  return data.id;
+}
