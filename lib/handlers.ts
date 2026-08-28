@@ -2036,7 +2036,7 @@ async function updateCampaign(supabase: SupabaseClient, args: Args): Promise<str
     .from('campaigns')
     .update(update)
     .eq('id', existing.id)
-    .select('id, slug, title, purpose, sort_order, status, created_at, updated_at')
+    .select('id, slug, title, purpose, layer, sort_order, status, created_at, updated_at')
     .single();
   if (error) {
     if (error.code === '23505') {
