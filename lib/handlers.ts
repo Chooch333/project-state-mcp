@@ -1969,7 +1969,7 @@ async function reviewPlan(supabase: SupabaseClient, args: Args): Promise<string>
 async function listCampaigns(supabase: SupabaseClient, _args: Args): Promise<string> {
   const { data, error } = await supabase
     .from('campaigns')
-    .select('id, slug, title, purpose, sort_order, status')
+    .select('id, slug, title, purpose, layer, sort_order, status')
     .order('sort_order', { ascending: true })
     .order('title', { ascending: true });
   if (error) throw new Error(error.message);
