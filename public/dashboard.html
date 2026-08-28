@@ -2336,13 +2336,23 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       return false;
     }
 
-    // One "Other notes" row — every still-noted disclosure lands here today
-    // (see the module comment above for why).
-    function notesBoardOtherNoteRow(disclosure, planById, campaignsById) {
-      // TODO: once list_judgment_calls starts returning plain_summary (see
-      // the disclosure filed about this gap), prefer it here and fall back
-      // to title — a one-line fix. title is the best available proxy today.
-      const text = disclosure.plain_summary || disclosure.title;
+    // Bound-build line shared by disclosure and blocking-question rows —
+    // omitted entirely when plan_id is null (e.g. a charles-directed
+    // question) or doesn't resolve to a plan in the sweep.
+    function notesBoardBoundBuildHtml(planId, planById) {
+      const boundPlan = planId ? planById[planId] : null;
+      if (!boundPlan) return '';
+      const boundTitle = (boundPlan.plain_title && String(boundPlan.plain_title).trim())
+        ? boundPlan.plain_title
+        : (boundPlan.title || '(needs a name)');
+      return '<div class="item-body" style="margin-top:6px;">Bound build: ' + escapeHtml(boundTitle) + '</div>';
+    }
+
+    // One disclosure row (list_judgment_calls). plain_summary is the line
+    // Charles reads; title is the fallback only when plain_summary is null,
+    // which is genuinely the case for the pre-migration disclosures.
+    function notesBoardDisclosureRow(disclosure, planById, campaignsById) {
+      const text = disclosure.plain_summary || disclosure.title || '';
       const dateLabel = disclosure.created_at ? new Date(disclosure.created_at).toLocaleDateString() : 'unknown date';
       const boundPlan = disclosure.plan_id ? planById[disclosure.plan_id] : null;
       const campaignId = boundPlan ? boundPlan.campaign_id : null;
@@ -2356,16 +2366,57 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
         html += shelfBadge('badge-muted', 'from a finished build — may be outdated');
       }
       html += '</div>';
-      // Bound build's plain_title — omitted entirely when plan_id is null
-      // (e.g. a charles-directed-origin question) or unresolvable.
-      if (boundPlan) {
-        const boundTitle = (boundPlan.plain_title && String(boundPlan.plain_title).trim())
-          ? boundPlan.plain_title
-          : (boundPlan.title || '(needs a name)');
-        html += '<div class="item-body" style="margin-top:6px;">Bound build: ' + escapeHtml(boundTitle) + '</div>';
-      }
+      html += notesBoardBoundBuildHtml(disclosure.plan_id, planById);
       html += '</div>';
       return html;
+    }
+
+    // One blocking-question row (list_questions — the Comms Table's blocking
+    // lane, origin build/charles-directed, never the build-judgment
+    // disclosures). Same plain_summary-then-title rule as a disclosure. These
+    // are the ones actually stopping a build, so they carry an urgent badge.
+    function notesBoardQuestionRow(question, planById, campaignsById) {
+      const text = question.plain_summary || question.title || '';
+      const dateLabel = question.created_at ? new Date(question.created_at).toLocaleDateString() : 'unknown date';
+      const boundPlan = question.plan_id ? planById[question.plan_id] : null;
+      const campaignId = boundPlan ? boundPlan.campaign_id : null;
+
+      let html = '<div class="item">';
+      html += '<div class="item-title">' + formatDisplayId(question.display_id) + escapeHtml(text) + '</div>';
+      html += '<div class="item-meta">';
+      html += '<span class="tag">' + escapeHtml(notesBoardCampaignName(campaignId, campaignsById)) + '</span>';
+      if (question.project_slug) {
+        html += '<span class="tag">' + escapeHtml(question.project_slug) + '</span>';
+      }
+      html += '<span>' + escapeHtml(dateLabel) + '</span>';
+      html += shelfBadge('badge-urgent', question.status === 'discussing' ? 'being discussed' : 'blocking a build');
+      html += '</div>';
+      html += notesBoardBoundBuildHtml(question.plan_id, planById);
+      html += '</div>';
+      return html;
+    }
+
+    // A section can hold a mix of row kinds (a blocking question, a
+    // disclosure, a succeeded-but-unchecked plan), so each row is wrapped
+    // with its kind — campaign grouping and date sorting then work uniformly
+    // across the mix.
+    function notesBoardRow(kind, data) { return { kind: kind, data: data }; }
+
+    function notesBoardRowCampaignId(row, planById) {
+      if (row.kind === 'plan') return row.data.campaign_id || null;
+      const p = row.data.plan_id ? planById[row.data.plan_id] : null;
+      return p ? (p.campaign_id || null) : null;
+    }
+
+    function notesBoardRowDate(row) {
+      if (row.kind === 'plan') return row.data.completed_at || row.data.created_at;
+      return row.data.created_at;
+    }
+
+    function notesBoardRowHtml(row, planById, campaignsById) {
+      if (row.kind === 'plan') return notesBoardDesignCheckRow(row.data, campaignsById);
+      if (row.kind === 'question') return notesBoardQuestionRow(row.data, planById, campaignsById);
+      return notesBoardDisclosureRow(row.data, planById, campaignsById);
     }
 
     function renderNotesBoardHtml(plansCache, campaigns, disclosures) {
