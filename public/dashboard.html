@@ -1596,7 +1596,14 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       html += '<div class="buildmap-lanes">';
       lanes.forEach(({ campaign, milestones, nodes }) => {
         html += '<div>';
-        html += '<div class="buildmap-lane-label">' + escapeHtml(campaign.title || '') + '</div>';
+        html += '<div class="buildmap-lane-label">' + escapeHtml(campaign.title || '');
+        // Platform layer, straight off list_campaigns. Rendered only when the
+        // campaign actually has one — a null layer shows nothing rather than
+        // an empty badge (side-projects is deliberately unlayered).
+        if (campaign.layer && String(campaign.layer).trim()) {
+          html += '<span class="buildmap-lane-layer">' + escapeHtml(campaign.layer) + '</span>';
+        }
+        html += '</div>';
         if (campaign.purpose) {
           html += '<div class="buildmap-lane-purpose">' + escapeHtml(campaign.purpose) + '</div>';
         }
