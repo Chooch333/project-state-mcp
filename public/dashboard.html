@@ -2242,17 +2242,30 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       }
     }
 
+    // Map v2 (BB-2026-08-27-comms-hub-faces): programmatic version of what
+    // the .tab-btn click handler below does, so a Build Map node click can
+    // switch to the Shelf tab AND await it actually finishing its render
+    // (the click handler itself fires loadCurrentTab without awaiting it —
+    // fine for a human click, not enough for "then find the rendered
+    // card"). Same DOM updates, same loadCurrentTab call; the click handler
+    // now just calls this instead of repeating the same four lines.
+    async function switchToTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      const btn = document.querySelector('.tab-btn[data-tab="' + tab + '"]');
+      if (btn) btn.classList.add('active');
+      currentTab = tab;
+      const panel = document.getElementById(tab + '-tab');
+      if (panel) panel.classList.add('active');
+      await loadCurrentTab();
+    }
+
     // ─────────────────────────────────────────────────────────
     // Event wiring
     // ─────────────────────────────────────────────────────────
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        currentTab = btn.dataset.tab;
-        document.getElementById(currentTab + '-tab').classList.add('active');
-        loadCurrentTab();
+        switchToTab(btn.dataset.tab);
       });
     });
 
