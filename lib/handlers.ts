@@ -2202,7 +2202,7 @@ async function postJudgmentCall(supabase: SupabaseClient, args: Args): Promise<s
 async function listJudgmentCalls(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   let query = supabase.from('build_questions')
-    .select('id, display_id, title, context, status, plan_id, tags, linked_decision, resolved_decision_project, created_at, resolved_at')
+    .select('id, display_id, title, context, status, plan_id, plain_summary, action_needed, tags, linked_decision, resolved_decision_project, created_at, resolved_at')
     .eq('project_id', projectId)
     .eq('origin', 'build-judgment')
     .order('created_at', { ascending: false });
