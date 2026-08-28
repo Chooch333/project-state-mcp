@@ -455,6 +455,72 @@ export const TOOLS = [
     },
   },
   {
+    name: 'update_plan_labels',
+    description: 'Rename and/or recategorize a plan\'s board-facing labels: plain_title, plain_summary, campaign, and designed_in. This is both the rename tool and the recategorize tool — only the fields you actually pass are updated, everything else keeps its current value. campaign is a campaign slug (see list_campaigns/create_campaign), resolved server-side to campaign_id; pass an empty string or null to clear the plan\'s current campaign, and note an unrecognized slug is a caller error, never silently dropped. This is the tool the soft label_warning on write_plan/update_plan_content points the calling chat back to. Campaigns are DA-chat authority: DA/planning chats may rename or recategorize a plan into a different (or newly forked) campaign freely, at their own discretion — these changes are logged as judgment calls via post_judgment_call, and Charles is never asked to approve a campaign change.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        plain_title: { type: 'string' },
+        plain_summary: { type: 'string' },
+        campaign: { type: 'string', description: 'Campaign slug to file this plan under. Pass an empty string or null to clear the current campaign.' },
+        designed_in: { type: 'string' },
+      },
+      required: ['plan_id'],
+    },
+  },
+  {
+    name: 'review_plan',
+    description: 'Record a design review on a completed plan: sets reviewed_at (now), reviewed_by, and optional review_notes. Valid ONLY when the plan\'s current status is succeeded — for any other status this returns a clear error and does NOT set the review fields.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        reviewed_by: { type: 'string' },
+        review_notes: { type: 'string' },
+      },
+      required: ['plan_id', 'reviewed_by'],
+    },
+  },
+  {
+    name: 'list_campaigns',
+    description: 'List all campaigns (id, slug, title, purpose, sort_order, status), ordered by sort_order then title. Campaigns are board-facing groupings for plans. Campaigns are DA-chat authority: DA/planning chats may create, rename, recategorize, or fork a new campaign out of an existing one freely, at their own discretion — these changes are logged as judgment calls via post_judgment_call, and Charles is never asked to approve a campaign change.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'create_campaign',
+    description: 'Create a new campaign — a board-facing grouping for plans. Campaigns are DA-chat authority: DA/planning chats may create, rename, recategorize, or fork a new campaign out of an existing one freely, at their own discretion — these changes are logged as judgment calls via post_judgment_call, and Charles is never asked to approve a campaign change. Errors clearly if slug already exists — use update_campaign to change the existing campaign instead of retrying create.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: { type: 'string' },
+        title: { type: 'string' },
+        purpose: { type: 'string' },
+        sort_order: { type: 'number', description: 'Board ordering; lower sorts first. Defaults to 100 if omitted.' },
+      },
+      required: ['slug', 'title'],
+    },
+  },
+  {
+    name: 'update_campaign',
+    description: 'Update an existing campaign\'s slug, title, purpose, sort_order, or status (active/done/parked). Identify the campaign with slug or id; only the fields you actually pass are changed. Campaigns are DA-chat authority: DA/planning chats may rename, recategorize, or fork a new campaign out of an existing one freely, at their own discretion — these changes are logged as judgment calls via post_judgment_call, and Charles is never asked to approve a campaign change.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: { type: 'string', description: 'Current slug identifying the campaign. Provide this or id.' },
+        id: { type: 'string', description: 'Campaign uuid. Provide this or slug.' },
+        new_slug: { type: 'string' },
+        title: { type: 'string' },
+        purpose: { type: 'string' },
+        sort_order: { type: 'number' },
+        status: { type: 'string', enum: ['active', 'done', 'parked'] },
+      },
+    },
+  },
+  {
     name: 'write_status_snapshot',
     description: 'Write a brief narrative summary of where the project is right now. Pass optional observed_at to describe a prior moment when seeding from old chats.',
     inputSchema: {
