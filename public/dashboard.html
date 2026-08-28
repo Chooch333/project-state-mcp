@@ -2499,6 +2499,41 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       });
     });
 
+    // Machine room toggle (BB-2026-08-27-comms-hub-faces): the six
+    // per-project tab buttons collapse behind this label by default.
+    // Nothing about the six tabs' own render functions changes — this only
+    // toggles the visibility of their nav buttons. display:'contents' (not
+    // 'inline'/'block') keeps the buttons as direct flex items of nav.tabs
+    // when expanded, so the existing flex/gap layout is unaffected.
+    const MACHINE_ROOM_TABS = ['overview', 'decisions', 'assumptions', 'plans', 'notes', 'lessons'];
+
+    function setMachineRoomExpanded(expanded) {
+      const container = document.getElementById('machine-room-buttons');
+      const toggle = document.getElementById('machine-room-toggle');
+      if (!container || !toggle) return;
+      container.style.display = expanded ? 'contents' : 'none';
+      toggle.setAttribute('aria-expanded', String(expanded));
+      toggle.textContent = (expanded ? '▾' : '▸') + " Machine room — the chats' working views";
+    }
+
+    document.getElementById('machine-room-toggle').addEventListener('click', () => {
+      const container = document.getElementById('machine-room-buttons');
+      const isExpanded = !!container && container.style.display !== 'none';
+      setMachineRoomExpanded(!isExpanded);
+    });
+    document.getElementById('machine-room-toggle').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        document.getElementById('machine-room-toggle').click();
+      }
+    });
+    // Defensive: if a machine-room tab is already active when the page
+    // loads, expand the container so its own button isn't hidden. Collapsed
+    // is still the default — currentTab is 'overview' with no persistence
+    // across reloads, and this defensive check runs before any other tab is
+    // ever selected in this page instance.
+    setMachineRoomExpanded(MACHINE_ROOM_TABS.includes(currentTab));
+
     document.getElementById('project-selector').addEventListener('change', (e) => {
       currentProject = e.target.value;
       localStorage.setItem('projectStateCurrentProject', currentProject);
