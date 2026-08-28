@@ -1452,8 +1452,31 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       }
     }
 
+    // Map v2 (BB-2026-08-27-comms-hub-faces): dot class for a build-plan
+    // NODE (driven by the plan's own status), as opposed to buildMapDotClass
+    // above which colors a MILESTONE (driven by resolved evidence status).
+    // Same visual language, extended with three plan-only statuses that no
+    // milestone evidence ever produces — see the bm-draft/bm-failed/
+    // bm-abandoned CSS added alongside the original bm-* set.
+    function buildMapNodeDotClass(plan) {
+      switch (plan.status) {
+        case 'draft': return 'bm-draft';
+        case 'queued': return 'bm-shelf';
+        case 'running': return 'bm-building';
+        case 'succeeded': return 'bm-done';
+        case 'blocked': return 'bm-blocked';
+        case 'failed': return 'bm-failed';
+        case 'abandoned': return 'bm-abandoned';
+        default: return 'bm-unresolved';
+      }
+    }
+
     // Resolve a single skeleton step's status against cached project data.
     // projectCache is keyed by project slug: { state, plans } or { error }.
+    // Map v2: unchanged and reused as-is for the new skeleton's milestone
+    // entries too — a milestone (label/summary/evidence/waiting_on_charles)
+    // carries the same evidence/waiting_on_charles shape a lane step did, so
+    // no adaptation was needed.
     function resolveBuildMapStep(step, projectCache) {
       const ev = step.evidence;
       if (!ev) {
