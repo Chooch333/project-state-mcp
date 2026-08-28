@@ -2500,18 +2500,34 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
         // project, in parallel, tolerant of per-project failures. Reuses
         // the project-slug set the sweep above already fetched via
         // list_projects rather than calling list_projects a second time.
+        //
+        // Blocking questions: ONE list_questions call for the whole board —
+        // no project_slug means every project, and no status means the
+        // default open+discussing queue. Unlike the disclosure calls, a
+        // failure here is surfaced rather than swallowed: an empty "Needs
+        // you" must mean "nothing needs you," never "the call failed."
         const slugs = Object.keys(plansCache);
-        const disclosureLists = await Promise.all(slugs.map(async slug => {
-          try {
-            const result = await callMcp('list_judgment_calls', { project_slug: slug, status: 'noted' });
-            return (result && result.disclosures) || [];
-          } catch (e) {
-            return [];
-          }
-        }));
+        const [disclosureLists, questionsResult] = await Promise.all([
+          Promise.all(slugs.map(async slug => {
+            try {
+              const result = await callMcp('list_judgment_calls', { project_slug: slug, status: 'noted' });
+              return (result && result.disclosures) || [];
+            } catch (e) {
+              return [];
+            }
+          })),
+          (async () => {
+            try {
+              const result = await callMcp('list_questions', {});
+              return { questions: (result && result.questions) || [] };
+            } catch (e) {
+              return { error: e.message };
+            }
+          })(),
+        ]);
         const disclosures = [].concat(...disclosureLists);
 
-        el.innerHTML = renderNotesBoardHtml(plansCache, campaigns, disclosures);
+        el.innerHTML = renderNotesBoardHtml(plansCache, campaigns, disclosures, questionsResult);
       } catch (e) {
         el.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
       }
