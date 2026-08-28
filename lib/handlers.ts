@@ -110,6 +110,16 @@ export async function callTool(name: string, args: Args): Promise<string> {
       return getPlan(supabase, args);
     case 'list_plans':
       return listPlans(supabase, args);
+    case 'update_plan_labels':
+      return updatePlanLabels(supabase, args);
+    case 'review_plan':
+      return reviewPlan(supabase, args);
+    case 'list_campaigns':
+      return listCampaigns(supabase, args);
+    case 'create_campaign':
+      return createCampaign(supabase, args);
+    case 'update_campaign':
+      return updateCampaign(supabase, args);
     case 'write_status_snapshot':
       return writeStatusSnapshot(supabase, args);
     case 'post_judgment_call':
