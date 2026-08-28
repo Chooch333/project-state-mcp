@@ -121,6 +121,13 @@
       white-space: nowrap;
       user-select: none;
     }
+    /* Machine room toggle (BB-2026-08-27-comms-hub-faces): the per-project
+       tab-group label doubles as a collapse/expand control for the six
+       buttons that follow it — see #machine-room-buttons. */
+    .tab-group-label-toggle {
+      cursor: pointer;
+    }
+    .tab-group-label-toggle:hover { color: var(--text-muted); }
     .tab-divider {
       width: 1px;
       align-self: center;
