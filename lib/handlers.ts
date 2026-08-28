@@ -2021,6 +2021,9 @@ async function updateCampaign(supabase: SupabaseClient, args: Args): Promise<str
   if (args.purpose !== undefined) {
     update.purpose = (typeof args.purpose === 'string' && args.purpose.trim().length > 0) ? args.purpose.trim() : null;
   }
+  if (args.layer !== undefined) {
+    update.layer = (typeof args.layer === 'string' && args.layer.trim().length > 0) ? args.layer.trim() : null;
+  }
   if (typeof args.sort_order === 'number') update.sort_order = args.sort_order;
   if (args.status !== undefined) {
     if (!['active', 'done', 'parked'].includes(args.status)) {
