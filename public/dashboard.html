@@ -1974,10 +1974,9 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     // grouped by campaign instead of by status. The candidate set is
     // UNCHANGED — isBuildShelfCandidate, same plansCache, same filtering as
     // before; only the grouping and card contents changed. Reads plan data
-    // from the SAME plansCache the shared sweep produces (now enriched
-    // per-plan — see sweepAllProjectPlans) — no second sweep here, and no
-    // separate per-blocked-plan get_plan call either (executor_report now
-    // rides along on every plan from the shared enrichment pass).
+    // from the SAME plansCache the shared sweep produces — no second sweep
+    // here, and no per-blocked-plan get_plan call either: executor_report
+    // rides along on every row list_plans returns.
     async function renderShelfSection(plansCache) {
       const allPlans = [];
       Object.keys(plansCache).forEach(slug => {
