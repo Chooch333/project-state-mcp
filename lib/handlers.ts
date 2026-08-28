@@ -1576,6 +1576,23 @@ async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> 
     ? args.provenance.trim()
     : null;
 
+  // Board-facing labels — all soft (see label_warning below). plain_title/plain_summary/
+  // designed_in are free text; campaign is a slug looked up to a campaign_id. An
+  // unresolvable campaign slug is a caller error (typo, stale reference) and fails the
+  // whole write loudly — that is distinct from simply omitting campaign, which is fine.
+  const plainTitle = (typeof args.plain_title === 'string' && args.plain_title.trim().length > 0)
+    ? args.plain_title.trim()
+    : null;
+  const plainSummary = (typeof args.plain_summary === 'string' && args.plain_summary.trim().length > 0)
+    ? args.plain_summary.trim()
+    : null;
+  const designedIn = (typeof args.designed_in === 'string' && args.designed_in.trim().length > 0)
+    ? args.designed_in.trim()
+    : null;
+  const campaignId = (typeof args.campaign === 'string' && args.campaign.trim().length > 0)
+    ? await resolveCampaignId(supabase, args.campaign.trim())
+    : null;
+
   const createdAt = parseOverrideTimestamp(args.created_at, 'created_at');
 
   const insertRow: any = {
@@ -1586,11 +1603,15 @@ async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> 
     tags,
     source: args.source,
     embedding: toPgVector(embedding),
+    plain_title: plainTitle,
+    plain_summary: plainSummary,
+    campaign_id: campaignId,
+    designed_in: designedIn,
   };
   if (createdAt) insertRow.created_at = createdAt;
 
   const { data, error } = await supabase.from('plans').insert(insertRow)
-    .select('id, title, status, provenance, tags, source, current_revision, created_at').single();
+    .select('id, title, status, provenance, tags, source, current_revision, created_at, plain_title, plain_summary, campaign_id, designed_in').single();
   if (error) throw new Error(error.message);
 
   // Seed revision 1 with the initial content. Change_reason is implicit ("initial write") on revision 1.
@@ -1614,6 +1635,12 @@ async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> 
     response.warning =
       'provenance was not provided. The plan is recorded but "how we got here" is not captured. ' +
       'If you can articulate what you consulted to produce this plan, call update_provenance with plan_id ' + data.id + ' to fill it in.';
+  }
+  // Soft enforcement, never a rejection: a build-brief-tagged plan that lands without a
+  // plain_title or a campaign gets flagged back to the calling chat, not to Charles.
+  if (tags.includes('build-brief') && (!data.plain_title || !data.campaign_id)) {
+    response.label_warning =
+      'warning: unnamed builds show as (needs a name) on the board — add your best-shot plain name now via update_plan_labels';
   }
   return JSON.stringify(response, null, 2);
 }
