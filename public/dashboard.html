@@ -493,34 +493,50 @@
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.04em;
+      margin-bottom: 2px;
+    }
+    /* Map v2: campaign purpose line under the lane title. */
+    .buildmap-lane-purpose {
+      font-size: 12px;
+      color: var(--text-subtle);
       margin-bottom: 14px;
     }
+    /* Map v2: a lane's entry count now varies (milestones + build nodes
+       combined), so the track wraps instead of the old fixed connector-line
+       pipeline — a rigid single-row line doesn't represent a variable-length,
+       non-linear list well. */
     .buildmap-track {
       position: relative;
       display: flex;
+      flex-wrap: wrap;
       align-items: flex-start;
+      row-gap: 22px;
       padding-top: 8px;
-    }
-    .buildmap-track::before {
-      content: '';
-      position: absolute;
-      top: 16px;
-      left: 8px;
-      right: 8px;
-      height: 2px;
-      background: var(--border-strong);
-      z-index: 0;
     }
     .buildmap-step {
       position: relative;
       z-index: 1;
-      flex: 1;
+      flex: 0 1 90px;
       display: flex;
       flex-direction: column;
       align-items: center;
       text-align: center;
       min-width: 90px;
       padding: 0 6px;
+    }
+    .buildmap-node-step {
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background 0.15s ease;
+    }
+    .buildmap-node-step:hover, .buildmap-node-step:focus-visible {
+      background: var(--bg);
+      outline: none;
+    }
+    .buildmap-needs-label {
+      color: var(--urgent);
+      font-style: italic;
+      font-weight: 600;
     }
     .buildmap-dot {
       width: 16px;
