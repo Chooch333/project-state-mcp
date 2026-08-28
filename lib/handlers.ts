@@ -2163,6 +2163,16 @@ async function postJudgmentCall(supabase: SupabaseClient, args: Args): Promise<s
     [...(Array.isArray(args.tags) ? args.tags : []), 'judgment-call'],
     projectId
   );
+
+  const plainSummary = (typeof args.plain_summary === 'string' && args.plain_summary.trim().length > 0)
+    ? args.plain_summary.trim()
+    : null;
+
+  // action_needed is soft too — never rejected for a missing/unrecognized value, it just
+  // falls back to 'fyi', the least-alarming default.
+  const VALID_ACTION_NEEDED = ['needs-charles', 'needs-design-check', 'fyi'];
+  const actionNeeded = VALID_ACTION_NEEDED.includes(args.action_needed) ? args.action_needed : 'fyi';
+
   const insertRow: any = {
     project_id: projectId,
     plan_id: args.plan_id,
@@ -2172,11 +2182,21 @@ async function postJudgmentCall(supabase: SupabaseClient, args: Args): Promise<s
     origin: 'build-judgment',
     asked_by: args.asked_by ?? null,
     tags,
+    plain_summary: plainSummary,
+    action_needed: actionNeeded,
   };
   const { data, error } = await supabase.from('build_questions').insert(insertRow)
-    .select('id, display_id, title, context, status, origin, plan_id, tags, created_at').single();
+    .select('id, display_id, title, context, status, origin, plan_id, tags, plain_summary, action_needed, created_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
+
+  const response: any = { ...data, tag_substitutions: substitutions };
+  // Soft enforcement, never a rejection: a disclosure with no plain_summary still posts
+  // fine — the warning just asks the calling chat to supply one next time.
+  if (!plainSummary) {
+    response.warning =
+      'warning: this disclosure has no plain_summary for Charles — add your own best-shot one-sentence summary next time via post_judgment_call';
+  }
+  return JSON.stringify(response, null, 2);
 }
 
 async function listJudgmentCalls(supabase: SupabaseClient, args: Args): Promise<string> {
