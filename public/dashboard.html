@@ -1845,7 +1845,10 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       const ageLabel = buildMapShelfAgeLabel(buildMapShelfAgeDays(plan.created_at));
       const hasPlainTitle = !!(plan.plain_title && String(plan.plain_title).trim());
 
-      let html = '<div class="item' + (opts.rowClass ? ' ' + opts.rowClass : '') + '">';
+      // Map v2 (BB-2026-08-27-comms-hub-faces): stable id so a Build Map
+      // click can scrollIntoView + highlight this exact card. Added to the
+      // existing card, not a behavior change.
+      let html = '<div class="item' + (opts.rowClass ? ' ' + opts.rowClass : '') + '" id="shelf-card-' + escapeHtml(plan.id) + '">';
 
       if (hasPlainTitle) {
         html += '<div class="item-title">' + escapeHtml(plan.plain_title) + '</div>';
