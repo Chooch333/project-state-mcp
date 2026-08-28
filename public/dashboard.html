@@ -1709,12 +1709,127 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       return html;
     }
 
-    // Render the Build shelf card. Reads plan data from the SAME plansCache
-    // loadBuildMapTab already built with one list_plans-per-project sweep —
-    // no second sweep here. The one extra read this makes is get_plan per
-    // blocked shelf item, because list_plans does not return executor_report
-    // (only the single-plan get_plan call does) and the blocked-reason line
-    // needs it; that set is small (typically 0-3 plans) and read-only.
+    // Shared sweep — one list_plans call per project, then one get_plan call
+    // per plan to enrich it with the label/review columns list_plans does not
+    // return (plain_title, plain_summary, campaign_id, designed_in,
+    // reviewed_at, reviewed_by) plus executor_report — used by every Program
+    // tab that needs plan data: the Build Shelf tab's queue today, the Build
+    // Map tab's lane-evidence resolution, and (a later task) the Notes Board.
+    // Enrichment runs in parallel (Promise.all) and is tolerant of individual
+    // failures — a plan whose get_plan call fails simply keeps those fields
+    // undefined; it never throws the whole sweep. Disclosed at build close:
+    // this means one get_plan call (and its embedding vector) per plan on
+    // every Shelf/Map refresh — accepted cost, see the build's disclosure.
+    async function sweepAllProjectPlans() {
+      const allProjects = await callMcp('list_projects', {});
+      const plansCache = {};
+      await Promise.all((allProjects || []).map(async proj => {
+        try {
+          plansCache[proj.slug] = await callMcp('list_plans', { project_slug: proj.slug });
+        } catch (e) {
+          plansCache[proj.slug] = { error: e.message, plans: [] };
+        }
+      }));
+
+      const ENRICHMENT_FIELDS = ['plain_title', 'plain_summary', 'campaign_id', 'designed_in', 'reviewed_at', 'reviewed_by', 'executor_report'];
+      const allPlansFlat = [];
+      Object.keys(plansCache).forEach(slug => {
+        const entry = plansCache[slug];
+        if (entry && !entry.error && entry.plans) allPlansFlat.push(...entry.plans);
+      });
+      await Promise.all(allPlansFlat.map(async p => {
+        try {
+          const full = await callMcp('get_plan', { plan_id: p.id });
+          ENRICHMENT_FIELDS.forEach(f => { p[f] = full[f]; });
+        } catch (e) {
+          // Leave enrichment fields undefined on this plan; sweep continues.
+        }
+      }));
+
+      return plansCache;
+    }
+
+    // Campaigns cache — one list_campaigns call, returned as-is (whatever
+    // shape callMcp hands back for it — live behavior today is
+    // { count, campaigns: [...] }, the same wrap-in-a-named-field pattern
+    // list_plans already uses for { plans: [...] }). Callers read .campaigns.
+    async function loadCampaignsCache() {
+      return await callMcp('list_campaigns', {});
+    }
+
+    // Plain-word stage mapping shared by every surface that shows a plan's
+    // stage in Charles-facing copy (the Shelf now; Build Map / Notes Board
+    // in a later task). Never hides an unrecognized status — falls back to
+    // the raw string.
+    function planStageInfo(plan) {
+      const status = plan.status;
+      if (status === 'draft') return { label: 'Being designed', cssClass: 'badge-muted' };
+      if (status === 'queued') return { label: 'Ready to build', cssClass: 'badge-normal' };
+      if (status === 'running') return { label: 'Building', cssClass: 'badge-warn' };
+      if (status === 'succeeded') {
+        if (!plan.reviewed_at) return { label: 'Done — awaiting design check', cssClass: 'badge-warn' };
+        const checkedDate = new Date(plan.reviewed_at).toLocaleDateString();
+        return { label: 'Done ✓ checked ' + checkedDate, cssClass: 'badge-good' };
+      }
+      if (status === 'failed') return { label: 'Stuck — failed', cssClass: 'badge-urgent' };
+      if (status === 'blocked') return { label: 'Stuck — waiting', cssClass: 'badge-warn' };
+      if (status === 'abandoned') return { label: 'Shelved for good', cssClass: 'badge-muted' };
+      return { label: status, cssClass: 'badge-muted' };
+    }
+
+    // Naming-legend paragraph — exact wording from PROTOCOL.md's "What
+    // Charles sees (naming legend)" section. Rendered once at the top of the
+    // Shelf tab, above all campaign groups.
+    const SHELF_NAMING_LEGEND = 'Builds carry a BB filing code (e.g. BB-2026-08-27-comms-hub-plumbing) for chats\' cross-referencing only — Charles never needs to know it or use it. The names Charles actually reads are the plain titles: plain_title and plain_summary on each plan.';
+
+    // One Shelf v2 card. Reuses splitBuildMapTitle/formatDisplayId exactly as
+    // buildMapShelfRow did for the filing-code chip, and escapeHtml for every
+    // piece of plan-supplied text.
+    function buildMapShelfCard(plan, opts) {
+      opts = opts || {};
+      const stage = planStageInfo(plan);
+      const idChip = splitBuildMapTitle(plan.title).idChip;
+      const ageLabel = buildMapShelfAgeLabel(buildMapShelfAgeDays(plan.created_at));
+      const hasPlainTitle = !!(plan.plain_title && String(plan.plain_title).trim());
+
+      let html = '<div class="item' + (opts.rowClass ? ' ' + opts.rowClass : '') + '">';
+
+      if (hasPlainTitle) {
+        html += '<div class="item-title">' + escapeHtml(plan.plain_title) + '</div>';
+      } else {
+        html += '<div class="item-title buildmap-shelf-needs-name">(needs a name)</div>';
+        html += '<div class="buildmap-shelf-fine">' + escapeHtml(plan.title || '') + '</div>';
+      }
+
+      html += '<div class="item-meta">';
+      html += '<span class="tag">' + escapeHtml(plan.project) + '</span>';
+      html += '<span>' + escapeHtml(ageLabel) + '</span>';
+      (opts.badges || []).forEach(b => { html += b; });
+      html += shelfBadge(stage.cssClass, stage.label);
+      html += '</div>';
+
+      if (opts.bodyLine) {
+        html += '<div class="item-body" style="margin-top:6px;">' + opts.bodyLine + '</div>';
+      }
+
+      if (plan.designed_in) {
+        html += '<div class="buildmap-shelf-fine">Designed in: ' + escapeHtml(plan.designed_in) + '</div>';
+      }
+
+      html += '<div class="buildmap-shelf-fine">' + (idChip ? formatDisplayId(idChip) : escapeHtml(plan.title || '')) + '</div>';
+
+      html += '</div>';
+      return html;
+    }
+
+    // Render the Build shelf card — Shelf v2 (BB-2026-08-27-comms-hub-faces):
+    // grouped by campaign instead of by status. The candidate set is
+    // UNCHANGED — isBuildShelfCandidate, same plansCache, same filtering as
+    // before; only the grouping and card contents changed. Reads plan data
+    // from the SAME plansCache the shared sweep produces (now enriched
+    // per-plan — see sweepAllProjectPlans) — no second sweep here, and no
+    // separate per-blocked-plan get_plan call either (executor_report now
+    // rides along on every plan from the shared enrichment pass).
     async function renderShelfSection(plansCache) {
       const allPlans = [];
       Object.keys(plansCache).forEach(slug => {
@@ -1729,61 +1844,102 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       const running = candidates.filter(p => p.status === 'running').sort(byCreatedAsc);
       const blocked = candidates.filter(p => p.status === 'blocked').sort(byCreatedAsc);
 
-      const blockedReports = {};
-      await Promise.all(blocked.map(async p => {
+      // Global "Next up" — the single oldest queued plan across every
+      // campaign combined, not per-campaign — same meaning as before Shelf v2.
+      const nextUpId = queued.length ? queued[0].id : null;
+
+      // Blocked cards prefer the newest Comms Table disclosure bound to the
+      // plan; else fall back to findBlockedReasonSentence(executor_report)
+      // exactly as before.
+      const blockedProjects = Array.from(new Set(blocked.map(p => p.project)));
+      const disclosuresByProject = {};
+      await Promise.all(blockedProjects.map(async slug => {
         try {
-          const full = await callMcp('get_plan', { plan_id: p.id });
-          blockedReports[p.id] = full.executor_report || null;
+          const result = await callMcp('list_judgment_calls', { project_slug: slug, status: 'all' });
+          disclosuresByProject[slug] = (result && result.disclosures) || [];
         } catch (e) {
-          blockedReports[p.id] = null;
+          disclosuresByProject[slug] = [];
         }
       }));
 
+      function blockedBody(p) {
+        const bound = (disclosuresByProject[p.project] || []).filter(d => d.plan_id === p.id);
+        if (bound.length) {
+          const newest = bound.reduce((a, b) => new Date(a.created_at) > new Date(b.created_at) ? a : b);
+          // Prefer plain_summary (the field this is specced against); fall
+          // back to the disclosure's `title`, which is what list_judgment_calls
+          // actually returns live today as the plain one-line summary.
+          const plain = newest.plain_summary || newest.title;
+          if (plain) return { text: plain, waitingOnCharles: true };
+        }
+        const reasonSentence = findBlockedReasonSentence(p.executor_report);
+        const reasonText = reasonSentence || firstSentence(p.executor_report) || '(no report)';
+        return { text: reasonText, waitingOnCharles: !!reasonSentence };
+      }
+
+      const campaignsResult = await loadCampaignsCache();
+      const campaigns = (campaignsResult && campaignsResult.campaigns) || [];
+
+      function cardForCandidate(p) {
+        const badges = [];
+        let rowClass = '';
+        let bodyLine = null;
+
+        if (p.status === 'queued' && p.id === nextUpId) {
+          badges.push(shelfBadge('badge-normal', 'Next up'));
+        }
+        if (p.status === 'running') {
+          const ageDays = buildMapShelfAgeDays(p.created_at);
+          const stale = ageDays !== null && ageDays > 14;
+          if (stale) { badges.push(shelfBadge('badge-warn', 'stale')); rowClass = 'buildmap-shelf-row-stale'; }
+        }
+        if (p.status === 'blocked') {
+          const b = blockedBody(p);
+          bodyLine = escapeHtml(b.text);
+          badges.push(b.waitingOnCharles ? shelfBadge('badge-urgent', 'waiting on you') : shelfBadge('badge-muted', 'blocked'));
+        } else if (p.plain_summary) {
+          bodyLine = escapeHtml(p.plain_summary);
+        }
+
+        return buildMapShelfCard(p, { badges, rowClass, bodyLine });
+      }
+
+      // Order within every group: running (oldest first), then queued
+      // (oldest first), then blocked (oldest first).
+      function orderGroup(items) {
+        const runningItems = items.filter(p => p.status === 'running').sort(byCreatedAsc);
+        const queuedItems = items.filter(p => p.status === 'queued').sort(byCreatedAsc);
+        const blockedItems = items.filter(p => p.status === 'blocked').sort(byCreatedAsc);
+        return runningItems.concat(queuedItems, blockedItems);
+      }
+
+      const activeCampaigns = campaigns.filter(c => c.status === 'active').sort((a, b) => a.sort_order - b.sort_order);
       let html = '<div class="card">';
       html += '<h2>Build shelf</h2>';
+      html += '<div class="buildmap-shelf-legend">' + escapeHtml(SHELF_NAMING_LEGEND) + '</div>';
       html += '<div class="buildmap-summary">';
       html += '<div class="buildmap-summary-stat"><strong>' + queued.length + '</strong> queued · <strong>' + running.length + '</strong> in flight · <strong>' + blocked.length + '</strong> blocked</div>';
       html += '</div>';
 
-      html += buildMapShelfGroup('Next up', 'oldest queued brief, claimed next', queued, 'Nothing queued.', (p, i) => {
-        const badge = i === 0 ? shelfBadge('badge-normal', 'Next up') : '';
-        return buildMapShelfRow(p, { badge });
+      // One group per active campaign that has at least one candidate,
+      // campaign sort_order ascending. Header = campaign title + purpose.
+      const filedCampaignIds = new Set();
+      activeCampaigns.forEach(c => {
+        const items = orderGroup(candidates.filter(p => p.campaign_id === c.id));
+        if (items.length === 0) return;
+        filedCampaignIds.add(c.id);
+        html += buildMapShelfGroup(c.title, c.purpose || '', items, '', cardForCandidate);
       });
 
-      html += buildMapShelfGroup('In flight', 'currently being built', running, 'Nothing in flight.', p => {
-        const ageDays = buildMapShelfAgeDays(p.created_at);
-        const stale = ageDays !== null && ageDays > 14;
-        const badge = stale ? shelfBadge('badge-warn', 'stale') : '';
-        return buildMapShelfRow(p, { rowClass: stale ? 'buildmap-shelf-row-stale' : '', badge });
-      });
-
-      html += buildMapShelfGroup('Blocked', 'needs something before it can continue', blocked, 'Nothing blocked.', p => {
-        const report = blockedReports[p.id];
-        const reasonSentence = findBlockedReasonSentence(report);
-        const reasonText = reasonSentence || firstSentence(report) || '(no report)';
-        const waitingOnCharles = !!reasonSentence;
-        const badge = waitingOnCharles ? shelfBadge('badge-urgent', 'waiting on you') : shelfBadge('badge-muted', 'blocked');
-        return buildMapShelfRow(p, { badge, bodyLine: escapeHtml(reasonText) });
-      });
+      // "Not yet filed": no campaign_id, or a campaign_id that doesn't
+      // resolve to a known ACTIVE campaign (done/parked, or deleted) — every
+      // candidate lands somewhere, preserving the identical-queue-set
+      // guarantee. No subtitle.
+      const unfiled = orderGroup(candidates.filter(p => !p.campaign_id || !filedCampaignIds.has(p.campaign_id)));
+      html += buildMapShelfGroup('Not yet filed', '', unfiled, 'Nothing unfiled.', cardForCandidate);
 
       html += '</div>';
       return html;
-    }
-
-    // Shared sweep — one list_plans call per project — used by both Program
-    // tabs: the Build Map tab's lane-evidence resolution and the Build
-    // Shelf tab's queue. Neither tab does its own independent sweep.
-    async function sweepAllProjectPlans() {
-      const allProjects = await callMcp('list_projects', {});
-      const plansCache = {};
-      await Promise.all((allProjects || []).map(async proj => {
-        try {
-          plansCache[proj.slug] = await callMcp('list_plans', { project_slug: proj.slug });
-        } catch (e) {
-          plansCache[proj.slug] = { error: e.message, plans: [] };
-        }
-      }));
-      return plansCache;
     }
 
     // Build Shelf tab — its own panel; shares the sweep above with Build Map.
