@@ -1529,7 +1529,22 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       return { status: 'unresolved', reason: 'unknown evidence type "' + ev.type + '" for ' + ev.ref + ' on ' + (ev.project || '?') };
     }
 
-    function renderBuildMapHtml(resolvedLanes, decisionQueue, summary) {
+    // Map v2 (BB-2026-08-27-comms-hub-faces): one lane per active campaign
+    // instead of the old fixed L0-L4 platform-layer pipeline. `lanes` is
+    // [{ campaign, milestones: [{milestone,resolved,needsLabel}], nodes: [plan,...] }]
+    // — see loadBuildMapTab for how it's built. Every lane holds two kinds
+    // of entries in a fixed order: (a) the campaign's plain-language
+    // milestones (skeleton doc, resolved the same way lane steps used to
+    // be), then (b) the campaign's build-plan nodes (every status, not just
+    // Shelf candidates — the real difference from the Shelf tab).
+    //
+    // Platform layer (Intake/Understanding/Memory/Expression/Operations) is
+    // NOT rendered anywhere here — the new skeleton is campaign-keyed with
+    // no L0-L4 field, and campaigns carry no platform-layer field either, so
+    // there is currently no live source for that badge. Flagged as a fork
+    // resolved by omission rather than fabricating a mapping — see the
+    // build's report.
+    function renderBuildMapHtml(lanes, decisionQueue, summary) {
       let html = '';
 
       html += '<div class="card">';
@@ -1546,38 +1561,68 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       html += '</div>';
 
       html += '<div class="card">';
-      html += '<h2>Lanes</h2>';
+      html += '<h2>Campaign lanes</h2>';
       html += '<div class="buildmap-lanes">';
-      resolvedLanes.forEach(({ lane, steps }) => {
+      lanes.forEach(({ campaign, milestones, nodes }) => {
         html += '<div>';
-        html += '<div class="buildmap-lane-label">' + escapeHtml(lane.id || '') + (lane.id ? ' — ' : '') + escapeHtml(lane.name || '') + '</div>';
+        html += '<div class="buildmap-lane-label">' + escapeHtml(campaign.title || '') + '</div>';
+        if (campaign.purpose) {
+          html += '<div class="buildmap-lane-purpose">' + escapeHtml(campaign.purpose) + '</div>';
+        }
         html += '<div class="buildmap-track">';
-        steps.forEach(({ step, resolved }) => {
+
+        milestones.forEach(({ milestone, resolved, needsLabel }) => {
           const dotClass = buildMapDotClass(resolved.status);
           const statusWord = BUILD_MAP_STATUS_LABEL[resolved.status] || 'Unresolved';
           const titleAttr = resolved.reason ? ' title="unresolved: ' + escapeHtml(resolved.reason) + '"' : '';
           html += '<div class="buildmap-step"' + titleAttr + '>';
           html += '<div class="buildmap-dot ' + dotClass + '"></div>';
-          html += '<div class="buildmap-step-label">' + escapeHtml(step.label || '') + '</div>';
+          if (needsLabel) {
+            html += '<div class="buildmap-step-label buildmap-needs-label">&#9888; needs a label</div>';
+          } else {
+            html += '<div class="buildmap-step-label">' + escapeHtml(milestone.label) + '</div>';
+          }
           html += '<div class="buildmap-step-status">' + escapeHtml(statusWord) + '</div>';
-          if (step.sub) {
-            html += '<div class="buildmap-step-sub">(' + escapeHtml(step.sub) + ')</div>';
+          if (milestone.summary) {
+            html += '<div class="buildmap-step-sub">' + escapeHtml(milestone.summary) + '</div>';
           }
           html += '</div>';
         });
-        html += '</div>';
-        html += '</div>';
+
+        // Build-plan nodes — clickable, jump to the Build Shelf tab. See
+        // wireBuildMapNodeClicks, called once after this HTML is inserted.
+        nodes.forEach(plan => {
+          const stage = planStageInfo(plan);
+          const dotClass = buildMapNodeDotClass(plan);
+          const hasPlainTitle = !!(plan.plain_title && String(plan.plain_title).trim());
+          const titleText = plan.plain_title || plan.title || '';
+          html += '<div class="buildmap-step buildmap-node-step" data-buildmap-node-id="' + escapeHtml(plan.id) + '" role="button" tabindex="0" title="' + escapeHtml(titleText) + '">';
+          html += '<div class="buildmap-dot ' + dotClass + '"></div>';
+          if (hasPlainTitle) {
+            html += '<div class="buildmap-step-label">' + escapeHtml(plan.plain_title) + '</div>';
+          } else {
+            html += '<div class="buildmap-step-label buildmap-shelf-needs-name">(needs a name)</div>';
+          }
+          html += '<div class="buildmap-step-status">' + escapeHtml(stage.label) + '</div>';
+          html += '</div>';
+        });
+
+        html += '</div>'; // track
+        html += '</div>'; // lane
       });
-      html += '</div>';
+      html += '</div>'; // lanes
 
       html += '<div class="buildmap-legend">';
       [
         ['bm-done', 'Done'],
         ['bm-building', 'Building now'],
-        ['bm-shelf', 'On the shelf'],
+        ['bm-shelf', 'On the shelf / ready to build'],
         ['bm-waiting', 'Waiting on you'],
         ['bm-scoped', 'Not yet scoped'],
         ['bm-blocked', 'Blocked'],
+        ['bm-draft', 'Being designed'],
+        ['bm-failed', 'Failed'],
+        ['bm-abandoned', 'Shelved for good'],
         ['bm-unresolved', 'Unresolved / error'],
       ].forEach(([cls, label]) => {
         html += '<div class="buildmap-legend-item"><span class="buildmap-legend-dot ' + cls + '"></span>' + escapeHtml(label) + '</div>';
@@ -1607,68 +1652,67 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       return html;
     }
 
-    async function renderBuildMap() {
-      const el = document.getElementById('buildmap-content');
-      el.innerHTML = '<div class="loading">Loading...</div>';
-      try {
-        const planResult = await callMcp('get_plan', { plan_id: BUILD_MAP_PLAN_ID });
-        let skeleton;
-        try {
-          skeleton = JSON.parse(planResult.content);
-        } catch (parseErr) {
-          throw new Error('Build map skeleton plan content is not valid JSON: ' + parseErr.message);
-        }
-        const lanes = skeleton.lanes || [];
-        const decisionQueue = skeleton.decision_queue || [];
-
-        // Distinct project slugs referenced by non-manual evidence.
-        const slugs = new Set();
-        lanes.forEach(lane => {
-          (lane.steps || []).forEach(step => {
-            const ev = step.evidence;
-            if (ev && ev.project && ev.type && ev.type !== 'manual') {
-              slugs.add(ev.project);
-            }
-          });
-        });
-
-        // Fetch + cache project state + plans for each distinct slug, once each.
-        const projectCache = {};
-        await Promise.all(Array.from(slugs).map(async slug => {
-          try {
-            const [state, plans] = await Promise.all([
-              callMcp('get_project_state', { project_slug: slug }),
-              callMcp('list_plans', { project_slug: slug }),
-            ]);
-            projectCache[slug] = { state, plans };
-          } catch (e) {
-            projectCache[slug] = { error: e.message };
-          }
-        }));
-
-        // Resolve every step's status.
-        let doneCount = 0;
-        let totalCount = 0;
-        const buildingNow = [];
-        let waitingOnYouCount = 0;
-        const resolvedLanes = lanes.map(lane => {
-          const steps = (lane.steps || []).map(step => {
-            const resolved = resolveBuildMapStep(step, projectCache);
-            totalCount++;
-            if (resolved.status === 'done') doneCount++;
-            if (resolved.status === 'building-now') buildingNow.push(step.label);
-            if (resolved.status === 'waiting-on-you') waitingOnYouCount++;
-            return { step, resolved };
-          });
-          return { lane, steps };
-        });
-
-        el.innerHTML = renderBuildMapHtml(resolvedLanes, decisionQueue, {
-          doneCount, totalCount, buildingNow, waitingOnYouCount,
-        });
-      } catch (e) {
-        el.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+    // Transient bottom-of-screen notice — used when a Build Map node click
+    // switches to the Shelf tab but the clicked plan has no Shelf card to
+    // jump to (succeeded / draft / failed / abandoned — isBuildShelfCandidate
+    // is false). escapeHtml per house convention even though this text is
+    // always Claude-authored, not user free text.
+    function showBuildMapToast(text) {
+      let toast = document.getElementById('buildmap-toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'buildmap-toast';
+        toast.className = 'buildmap-toast';
+        document.body.appendChild(toast);
       }
+      toast.innerHTML = escapeHtml(text);
+      toast.classList.add('buildmap-toast-visible');
+      clearTimeout(showBuildMapToast._hideTimer);
+      showBuildMapToast._hideTimer = setTimeout(() => {
+        toast.classList.remove('buildmap-toast-visible');
+      }, 4000);
+    }
+
+    // Click behavior for a Build Map build-plan node (never a milestone —
+    // milestones have no Shelf card). Switches to the Build Shelf tab first
+    // (awaited, so the tab has actually rendered before we look for a card),
+    // then either scrolls to + highlights the plan's card, or — for a plan
+    // that structurally has no Shelf card (succeeded/draft/failed/abandoned)
+    // — shows a toast instead of silently doing nothing. This is a decided
+    // fork (the brief doesn't say what a Map click on a non-Shelf-candidate
+    // node should do) — see the build's report.
+    async function handleBuildMapNodeClick(plan) {
+      await switchToTab('buildshelf');
+      if (isBuildShelfCandidate(plan)) {
+        const cardEl = document.getElementById('shelf-card-' + plan.id);
+        if (cardEl) {
+          cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          cardEl.classList.add('buildmap-shelf-card-highlight');
+          setTimeout(() => cardEl.classList.remove('buildmap-shelf-card-highlight'), 2000);
+        }
+      } else {
+        const stage = planStageInfo(plan);
+        const name = plan.plain_title || plan.title || '(unnamed build)';
+        showBuildMapToast('"' + name + '" isn\'t on the shelf (' + stage.label + ') — nothing to jump to.');
+      }
+    }
+
+    // Wire click/keyboard activation on every rendered build-node dot after
+    // renderBuildMapHtml's string has been inserted into the DOM (event
+    // delegation isn't used here since each node needs its own plan object,
+    // not just an id lookup against a single flat list — this map is built
+    // fresh from the same `lanes` structure the render pass just consumed).
+    function wireBuildMapNodeClicks(lanes) {
+      const planById = {};
+      lanes.forEach(({ nodes }) => nodes.forEach(p => { planById[p.id] = p; }));
+      document.querySelectorAll('#buildmap-content .buildmap-node-step').forEach(nodeEl => {
+        const plan = planById[nodeEl.getAttribute('data-buildmap-node-id')];
+        if (!plan) return;
+        nodeEl.addEventListener('click', () => handleBuildMapNodeClick(plan));
+        nodeEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleBuildMapNodeClick(plan); }
+        });
+      });
     }
 
     // ─────────────────────────────────────────────────────────
