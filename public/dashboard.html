@@ -541,6 +541,13 @@
     .bm-scoped { background: var(--surface); border: 2px solid var(--border-strong); }
     .bm-blocked { background: var(--urgent); border: 2px solid var(--urgent); }
     .bm-unresolved { background: var(--surface); border: 2px dotted var(--text-subtle); cursor: help; }
+    /* Map v2 (BB-2026-08-27-comms-hub-faces): build-node-only statuses that
+       milestone evidence never produces (draft/failed/abandoned plan
+       status), rendered via buildMapNodeDotClass — same visual language as
+       the milestone dots above, extended rather than modified. */
+    .bm-draft { background: var(--surface); border: 2px dashed var(--border-strong); }
+    .bm-failed { background: var(--surface); border: 3px solid var(--urgent); }
+    .bm-abandoned { background: var(--bg); border: 2px dashed var(--text-subtle); opacity: 0.55; }
     @keyframes bm-pulse {
       0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
       50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent); }
