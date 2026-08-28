@@ -502,6 +502,22 @@
       letter-spacing: 0.04em;
       margin-bottom: 2px;
     }
+    /* Reads (BB-2026-08-28-comms-hub-reads): platform-layer badge beside the
+       lane title, restoring what CD-J-022 dropped when no live source existed.
+       campaigns.layer is that source now. A campaign whose layer is null gets
+       no badge at all — never an empty or placeholder one. */
+    .buildmap-lane-layer {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 1px 7px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-subtle);
+      letter-spacing: 0.06em;
+      vertical-align: 1px;
+    }
     /* Map v2: campaign purpose line under the lane title. */
     .buildmap-lane-purpose {
       font-size: 12px;
