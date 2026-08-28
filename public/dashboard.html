@@ -1844,17 +1844,19 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       return html;
     }
 
-    // Shared sweep — one list_plans call per project, then one get_plan call
-    // per plan to enrich it with the label/review columns list_plans does not
-    // return (plain_title, plain_summary, campaign_id, designed_in,
-    // reviewed_at, reviewed_by) plus executor_report — used by every Program
-    // tab that needs plan data: the Build Shelf tab's queue today, the Build
-    // Map tab's lane-evidence resolution, and (a later task) the Notes Board.
-    // Enrichment runs in parallel (Promise.all) and is tolerant of individual
-    // failures — a plan whose get_plan call fails simply keeps those fields
-    // undefined; it never throws the whole sweep. Disclosed at build close:
-    // this means one get_plan call (and its embedding vector) per plan on
-    // every Shelf/Map refresh — accepted cost, see the build's disclosure.
+    // Shared sweep — one list_plans call per project, and nothing else.
+    // Used by every Program tab that needs plan data: the Build Shelf tab's
+    // queue, the Build Map tab's lane-evidence resolution, and the Notes
+    // Board.
+    //
+    // BB-2026-08-28-comms-hub-reads: list_plans now returns the label/review
+    // columns directly (plain_title, plain_summary, campaign_id, designed_in,
+    // reviewed_at, reviewed_by) plus executor_report, so the per-plan get_plan
+    // enrichment fan-out this used to run — one extra call per plan, each
+    // dragging that plan's unused embedding vector along, on every 60s
+    // Program-tab refresh (CD-J-015) — is gone, as is the separate
+    // per-blocked-plan get_plan call for executor_report (CD-J-005). One
+    // Program-tab refresh is now one list_plans per project, no plan fan-out.
     async function sweepAllProjectPlans() {
       const allProjects = await callMcp('list_projects', {});
       const plansCache = {};
