@@ -484,7 +484,7 @@ export const TOOLS = [
   },
   {
     name: 'list_campaigns',
-    description: 'List all campaigns (id, slug, title, purpose, sort_order, status), ordered by sort_order then title. Campaigns are board-facing groupings for plans. Campaigns are DA-chat authority: DA/planning chats may create, rename, recategorize, or fork a new campaign out of an existing one freely, at their own discretion — these changes are logged as judgment calls via post_judgment_call, and Charles is never asked to approve a campaign change.',
+    description: 'List all campaigns (id, slug, title, purpose, layer, sort_order, status), ordered by sort_order then title. Campaigns are board-facing groupings for plans. Campaigns are DA-chat authority: DA/planning chats may create, rename, recategorize, or fork a new campaign out of an existing one freely, at their own discretion — these changes are logged as judgment calls via post_judgment_call, and Charles is never asked to approve a campaign change.',
     inputSchema: {
       type: 'object',
       properties: {},
