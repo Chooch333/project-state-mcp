@@ -516,6 +516,7 @@ export const TOOLS = [
         new_slug: { type: 'string' },
         title: { type: 'string' },
         purpose: { type: 'string' },
+        layer: { type: 'string', description: 'Platform layer this campaign belongs to (e.g. Intake, Understanding, Operations, Expression) — optional, used for Build Map lane badges.' },
         sort_order: { type: 'number' },
         status: { type: 'string', enum: ['active', 'done', 'parked'] },
       },
