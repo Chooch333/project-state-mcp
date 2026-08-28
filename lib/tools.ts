@@ -368,7 +368,7 @@ export const TOOLS = [
   },
   {
     name: 'write_plan',
-    description: 'Store a build plan document. Always try to supply provenance — what you consulted to produce this plan. Pass optional created_at to backdate. When backdating, revision 1 is also backdated to keep history consistent.',
+    description: 'Store a build plan document. Always try to supply provenance — what you consulted to produce this plan. Also accepts optional board-facing labels: plain_title, plain_summary, designed_in (free text), and campaign (a campaign slug — see list_campaigns/create_campaign — resolved server-side to campaign_id; an unrecognized slug is a caller error and the write fails naming it, it is never silently dropped). Campaigns are DA-chat authority: DA/planning chats may rename, recategorize, or fork a new campaign out of an existing one freely, at their own discretion — these changes are logged as judgment calls via post_judgment_call, and Charles is never asked to approve a campaign change. Soft enforcement is a hard design requirement here: this call NEVER fails for missing labels — but if the plan is tagged build-brief and lands without a plain_title or a campaign, the response carries an additional label_warning string addressed to the calling chat (never to Charles), instructing it to add its best-shot plain name via update_plan_labels. Pass optional created_at to backdate. When backdating, revision 1 is also backdated to keep history consistent.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -379,6 +379,10 @@ export const TOOLS = [
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
         created_at: { type: 'string', description: 'Optional ISO 8601 timestamp override. Defaults to now().' },
+        plain_title: { type: 'string', description: 'Plain-English board-facing name for the build, distinct from the technical title. Optional but strongly encouraged on build-brief-tagged plans — see the soft label_warning behavior above.' },
+        plain_summary: { type: 'string', description: 'One-sentence plain-English summary of what this plan is, for the board.' },
+        campaign: { type: 'string', description: 'Campaign slug to file this plan under (see list_campaigns). Resolved to campaign_id server-side; an unrecognized slug errors rather than being silently dropped. Campaigns are DA-chat authority — fluid, judgment-call territory, never needing Charles\'s approval.' },
+        designed_in: { type: 'string', description: 'Free-text pointer to where this plan was designed (e.g. a DA-chat session identifier), for provenance on the board.' },
       },
       required: ['project_slug', 'title', 'content', 'source'],
     },
