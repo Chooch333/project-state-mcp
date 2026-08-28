@@ -2221,6 +2221,73 @@ async function listJudgmentCalls(supabase: SupabaseClient, args: Args): Promise<
   }, null, 2);
 }
 
+// ─────────────────────────────────────────────────────────
+// Blocking Q-channel reader — BB-2026-08-28-comms-hub-reads.
+//
+// Reads ONLY the blocking lane of the Comms Table: build_questions
+// rows whose origin is 'build' or 'charles-directed'. It must never
+// return origin='build-judgment' rows — those are disclosures, a
+// separate NON-BLOCKING channel that has its own reader
+// (list_judgment_calls). That origin boundary is a hard architectural
+// rule in this system; do not widen this filter.
+// ─────────────────────────────────────────────────────────
+
+async function listQuestions(supabase: SupabaseClient, args: Args): Promise<string> {
+  // project_slug is optional here, unlike the other list tools: omitting it
+  // reads the blocking lane across every project, which is how the Comms Hub
+  // renders one combined queue.
+  let projectId: string | null = null;
+  const scopedSlug = typeof args.project_slug === 'string' && args.project_slug.trim().length > 0
+    ? args.project_slug.trim()
+    : null;
+  if (scopedSlug) {
+    projectId = await resolveProjectId(supabase, scopedSlug);
+  }
+
+  let query = supabase.from('build_questions')
+    .select('id, display_id, title, context, status, plan_id, project_id, plain_summary, created_at')
+    .in('origin', ['build', 'charles-directed'])
+    .order('created_at', { ascending: false });
+
+  if (projectId) query = query.eq('project_id', projectId);
+
+  const status = typeof args.status === 'string' && args.status.trim().length > 0
+    ? args.status.trim()
+    : null;
+  if (status === null) {
+    // Default view: the active queue.
+    query = query.in('status', ['open', 'discussing']);
+  } else if (status !== 'all') {
+    query = query.eq('status', status);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  // Label every row with its project slug so a cross-project caller knows where
+  // each question lives (same convention as findByTags/searchState). When the
+  // caller scoped to one project we already know the slug — skip the lookup.
+  let idToSlug: Map<string, string> | null = null;
+  if (!projectId) {
+    const { data: projectRows } = await supabase.from('projects').select('id, slug');
+    const map = new Map<string, string>();
+    (projectRows ?? []).forEach((p: any) => map.set(p.id, p.slug));
+    idToSlug = map;
+  }
+
+  const questions = (data ?? []).map((q: any) => ({
+    ...q,
+    project_slug: idToSlug ? (idToSlug.get(q.project_id) ?? null) : scopedSlug,
+  }));
+
+  return JSON.stringify({
+    project_slug: scopedSlug,
+    status_filter: status ?? 'open+discussing',
+    count: questions.length,
+    questions,
+  }, null, 2);
+}
+
 async function disposeJudgmentCall(supabase: SupabaseClient, args: Args): Promise<string> {
   if (!['reviewed-agree', 'reviewed-corrected'].includes(args.disposition)) {
     throw new Error(`disposition must be "reviewed-agree" or "reviewed-corrected" (got "${args.disposition}")`);
