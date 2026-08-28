@@ -2220,6 +2220,220 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     }
 
     // ─────────────────────────────────────────────────────────
+    // Notes Board (BB-2026-08-27-comms-hub-faces) — new Program tab.
+    //
+    // CONFIRMED LIVE GAP: list_judgment_calls does not return plain_summary
+    // or action_needed (verified live this build — see the disclosure filed
+    // about it), even though both columns exist on the underlying table.
+    // Without action_needed there is no honest way to sort a disclosure into
+    // "needs Charles" vs. "needs a design check" vs. "FYI" — so this board
+    // does NOT guess. "Needs you" renders empty with an explanation (no tool
+    // available to this board can see blocking questions either). "Waiting
+    // for a design check" is populated ONLY from plan status/reviewed_at,
+    // which does not depend on the missing fields and works correctly today.
+    // Every still-noted disclosure lands in "Other notes" — an honest stand-
+    // in for the brief's literal "FYI" section, since nothing here can
+    // isolate true FYI-only disclosures from the rest.
+    // ─────────────────────────────────────────────────────────
+
+    const NOTESBOARD_NEEDS_YOU_EXPLAIN = "Blocking questions filed on the Comms Table aren't reachable by any tool this board can call yet, and disclosures can't yet be told apart by whether they need you specifically — see ‘Other notes’ below.";
+    const NOTESBOARD_DESIGN_CHECK_EXPLAIN = "Disclosures specifically flagged for a design check aren't distinguishable from other notes yet — check ‘Other notes’ below as well.";
+    const NOTESBOARD_OTHER_NOTES_EXPLAIN = "Every note below is listed here until this board can tell which ones need your attention specifically vs. which are just FYI (a data gap, not a data problem — see the disclosure filed about it).";
+
+    // id -> enriched plan, flattened across every project in the sweep.
+    function notesBoardPlanIndex(plansCache) {
+      const byId = {};
+      Object.keys(plansCache).forEach(slug => {
+        const entry = plansCache[slug];
+        if (!entry || entry.error || !entry.plans) return;
+        entry.plans.forEach(p => { byId[p.id] = p; });
+      });
+      return byId;
+    }
+
+    // Same "(needs a name)"-style honesty the Shelf/Map use, but the exact
+    // fallback text specced for this board's rows: real title + a visibly
+    // italicized "not yet in plain words" flag, never hidden.
+    function notesBoardPlanTitleHtml(plan) {
+      const hasPlain = !!(plan.plain_title && String(plan.plain_title).trim());
+      if (hasPlain) return escapeHtml(plan.plain_title);
+      return escapeHtml(plan.title || '(untitled)') + ' <em>(not yet in plain words)</em>';
+    }
+
+    // Shelf v2's campaign-grouping fold-in rule (CD-J-018), reused for
+    // consistency: a campaign_id that doesn't resolve to a live ACTIVE
+    // campaign is treated the same as no campaign_id at all.
+    function notesBoardCampaignName(campaignId, campaignsById) {
+      const c = campaignId ? campaignsById[campaignId] : null;
+      if (c && c.status === 'active') return c.title;
+      return 'Not yet filed';
+    }
+
+    // Generic campaign grouping shared by both populated sections below —
+    // one group per active campaign (sort_order order) that has at least
+    // one row, then a "Not yet filed" group last (always rendered, even
+    // empty) — same shape renderShelfSection uses for the Build Shelf.
+    function groupRowsByCampaign(rows, campaigns, getCampaignId, sortFn) {
+      const activeCampaigns = campaigns.filter(c => c.status === 'active').sort((a, b) => a.sort_order - b.sort_order);
+      const filedIds = new Set();
+      const groups = [];
+      activeCampaigns.forEach(c => {
+        const items = rows.filter(r => getCampaignId(r) === c.id);
+        if (items.length === 0) return;
+        filedIds.add(c.id);
+        groups.push({ title: c.title, items: sortFn ? sortFn(items) : items });
+      });
+      const unfiled = rows.filter(r => !getCampaignId(r) || !filedIds.has(getCampaignId(r)));
+      groups.push({ title: 'Not yet filed', items: sortFn ? sortFn(unfiled) : unfiled });
+      return groups;
+    }
+
+    // One "Waiting for a design check" row — a succeeded, not-yet-reviewed
+    // plan.
+    function notesBoardDesignCheckRow(plan, campaignsById) {
+      const dateVal = plan.completed_at || plan.created_at;
+      const dateLabel = dateVal ? new Date(dateVal).toLocaleDateString() : 'unknown date';
+      let html = '<div class="item">';
+      html += '<div class="item-title">' + notesBoardPlanTitleHtml(plan) + '</div>';
+      html += '<div class="item-meta">';
+      html += '<span class="tag">' + escapeHtml(notesBoardCampaignName(plan.campaign_id, campaignsById)) + '</span>';
+      html += '<span>' + escapeHtml(dateLabel) + '</span>';
+      html += '</div>';
+      html += '</div>';
+      return html;
+    }
+
+    // "May be outdated" badge — the one piece of this board's badge logic
+    // that IS fully computable today (plan status/reviewed_at, not
+    // action_needed). A disclosure with no resolvable plan gets no badge —
+    // this never guesses.
+    function notesBoardOutdatedBadge(disclosure, planById) {
+      if (!disclosure.plan_id) return false;
+      const p = planById[disclosure.plan_id];
+      if (!p) return false;
+      if (p.status === 'abandoned') return true;
+      if (p.status === 'succeeded' && p.reviewed_at) return true;
+      return false;
+    }
+
+    // One "Other notes" row — every still-noted disclosure lands here today
+    // (see the module comment above for why).
+    function notesBoardOtherNoteRow(disclosure, planById, campaignsById) {
+      // TODO: once list_judgment_calls starts returning plain_summary (see
+      // the disclosure filed about this gap), prefer it here and fall back
+      // to title — a one-line fix. title is the best available proxy today.
+      const text = disclosure.plain_summary || disclosure.title;
+      const dateLabel = disclosure.created_at ? new Date(disclosure.created_at).toLocaleDateString() : 'unknown date';
+      const boundPlan = disclosure.plan_id ? planById[disclosure.plan_id] : null;
+      const campaignId = boundPlan ? boundPlan.campaign_id : null;
+
+      let html = '<div class="item">';
+      html += '<div class="item-title">' + formatDisplayId(disclosure.display_id) + escapeHtml(text) + '</div>';
+      html += '<div class="item-meta">';
+      html += '<span class="tag">' + escapeHtml(notesBoardCampaignName(campaignId, campaignsById)) + '</span>';
+      html += '<span>' + escapeHtml(dateLabel) + '</span>';
+      if (notesBoardOutdatedBadge(disclosure, planById)) {
+        html += shelfBadge('badge-muted', 'from a finished build — may be outdated');
+      }
+      html += '</div>';
+      // Bound build's plain_title — omitted entirely when plan_id is null
+      // (e.g. a charles-directed-origin question) or unresolvable.
+      if (boundPlan) {
+        const boundTitle = (boundPlan.plain_title && String(boundPlan.plain_title).trim())
+          ? boundPlan.plain_title
+          : (boundPlan.title || '(needs a name)');
+        html += '<div class="item-body" style="margin-top:6px;">Bound build: ' + escapeHtml(boundTitle) + '</div>';
+      }
+      html += '</div>';
+      return html;
+    }
+
+    function renderNotesBoardHtml(plansCache, campaigns, disclosures) {
+      const planById = notesBoardPlanIndex(plansCache);
+      const campaignsById = {};
+      campaigns.forEach(c => { campaignsById[c.id] = c; });
+
+      const allPlansFlat = Object.keys(planById).map(id => planById[id]);
+      const byCreatedAsc = (a, b) => new Date(a.created_at) - new Date(b.created_at);
+      const byCreatedDesc = (a, b) => new Date(b.created_at) - new Date(a.created_at);
+
+      // "Waiting for a design check" — succeeded plans with no reviewed_at.
+      const designCheckPlans = allPlansFlat.filter(p => p.status === 'succeeded' && !p.reviewed_at);
+      const designCheckGroups = groupRowsByCampaign(
+        designCheckPlans, campaigns, p => p.campaign_id,
+        items => items.slice().sort(byCreatedAsc)
+      );
+
+      // "Other notes" — every disclosure passed in (already status=noted
+      // from the caller's sweep); grouped by its bound plan's campaign.
+      const otherNotesGroups = groupRowsByCampaign(
+        disclosures, campaigns,
+        d => { const p = d.plan_id ? planById[d.plan_id] : null; return p ? p.campaign_id : null; },
+        items => items.slice().sort(byCreatedDesc)
+      );
+
+      let html = '';
+
+      html += '<div class="card">';
+      html += '<h2>Needs you</h2>';
+      html += '<div class="buildmap-shelf-legend">' + escapeHtml(NOTESBOARD_NEEDS_YOU_EXPLAIN) + '</div>';
+      html += '</div>';
+
+      html += '<div class="card">';
+      html += '<h2>Waiting for a design check <span class="count">' + designCheckPlans.length + '</span></h2>';
+      html += '<div class="buildmap-shelf-legend">' + escapeHtml(NOTESBOARD_DESIGN_CHECK_EXPLAIN) + '</div>';
+      designCheckGroups.forEach(g => {
+        html += buildMapShelfGroup(g.title, '', g.items, 'Nothing here.', p => notesBoardDesignCheckRow(p, campaignsById));
+      });
+      html += '</div>';
+
+      html += '<div class="card">';
+      html += '<h2>Other notes <span class="count">' + disclosures.length + '</span></h2>';
+      html += '<div class="buildmap-shelf-legend">' + escapeHtml(NOTESBOARD_OTHER_NOTES_EXPLAIN) + '</div>';
+      otherNotesGroups.forEach(g => {
+        html += buildMapShelfGroup(g.title, '', g.items, 'Nothing here.', d => notesBoardOtherNoteRow(d, planById, campaignsById));
+      });
+      html += '</div>';
+
+      return html;
+    }
+
+    // Notes Board tab loader. Reuses sweepAllProjectPlans() fresh on every
+    // load — neither the Build Map nor Build Shelf tab memoizes that sweep
+    // across loads today, so this follows the same convention rather than
+    // inventing a new caching layer.
+    async function loadNotesBoardTab() {
+      const el = document.getElementById('notesboard-content');
+      el.innerHTML = '<div class="loading">Loading...</div>';
+      try {
+        const [plansCache, campaignsResult] = await Promise.all([
+          sweepAllProjectPlans(),
+          loadCampaignsCache(),
+        ]);
+        const campaigns = (campaignsResult && campaignsResult.campaigns) || [];
+
+        // Disclosures: one list_judgment_calls(status:'noted') call per
+        // project, in parallel, tolerant of per-project failures. Reuses
+        // the project-slug set the sweep above already fetched via
+        // list_projects rather than calling list_projects a second time.
+        const slugs = Object.keys(plansCache);
+        const disclosureLists = await Promise.all(slugs.map(async slug => {
+          try {
+            const result = await callMcp('list_judgment_calls', { project_slug: slug, status: 'noted' });
+            return (result && result.disclosures) || [];
+          } catch (e) {
+            return [];
+          }
+        }));
+        const disclosures = [].concat(...disclosureLists);
+
+        el.innerHTML = renderNotesBoardHtml(plansCache, campaigns, disclosures);
+      } catch (e) {
+        el.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
     // About tab — render the embedded doc
     // ─────────────────────────────────────────────────────────
     function renderAbout() {
