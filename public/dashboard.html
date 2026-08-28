@@ -2232,23 +2232,31 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     // ─────────────────────────────────────────────────────────
     // Notes Board (BB-2026-08-27-comms-hub-faces) — new Program tab.
     //
-    // CONFIRMED LIVE GAP: list_judgment_calls does not return plain_summary
-    // or action_needed (verified live this build — see the disclosure filed
-    // about it), even though both columns exist on the underlying table.
-    // Without action_needed there is no honest way to sort a disclosure into
-    // "needs Charles" vs. "needs a design check" vs. "FYI" — so this board
-    // does NOT guess. "Needs you" renders empty with an explanation (no tool
-    // available to this board can see blocking questions either). "Waiting
-    // for a design check" is populated ONLY from plan status/reviewed_at,
-    // which does not depend on the missing fields and works correctly today.
-    // Every still-noted disclosure lands in "Other notes" — an honest stand-
-    // in for the brief's literal "FYI" section, since nothing here can
-    // isolate true FYI-only disclosures from the rest.
+    // BB-2026-08-28-comms-hub-reads: both gaps this board was built around are
+    // closed. list_judgment_calls now returns plain_summary and action_needed,
+    // and the new list_questions tool reads the blocking Comms Table lane
+    // (origin build/charles-directed, never the build-judgment disclosures).
+    // So the three sections sort for real now:
+    //
+    //   Needs you      — open/discussing blocking questions from every
+    //                    project, plus disclosures flagged needs-charles.
+    //   Design check   — disclosures flagged needs-design-check, plus
+    //                    succeeded-but-unchecked plans (CD-J-019's half that
+    //                    always worked — unchanged).
+    //   FYI            — disclosures flagged fyi, and anything whose flag is
+    //                    missing or unrecognized. Nothing is dropped, and
+    //                    nothing is promoted into a louder section than its
+    //                    flag earned.
+    //
+    // Every row prefers plain_summary and falls back to title only when
+    // plain_summary is null — pre-migration disclosures (CD-J-001..007)
+    // genuinely have none, so that fallback stays. The only fallback text
+    // that appears is when a tool call actually fails: if list_questions
+    // errors, "Needs you" says so in plain words rather than showing a
+    // silent, falsely-reassuring empty list.
     // ─────────────────────────────────────────────────────────
 
-    const NOTESBOARD_NEEDS_YOU_EXPLAIN = "Blocking questions filed on the Comms Table aren't reachable by any tool this board can call yet, and disclosures can't yet be told apart by whether they need you specifically — see ‘Other notes’ below.";
-    const NOTESBOARD_DESIGN_CHECK_EXPLAIN = "Disclosures specifically flagged for a design check aren't distinguishable from other notes yet — check ‘Other notes’ below as well.";
-    const NOTESBOARD_OTHER_NOTES_EXPLAIN = "Every note below is listed here until this board can tell which ones need your attention specifically vs. which are just FYI (a data gap, not a data problem — see the disclosure filed about it).";
+    const NOTESBOARD_QUESTIONS_ERROR_PREFIX = "Couldn't read blocking questions from the Comms Table just now, so this section may be missing some — everything else below is current. The tool said: ";
 
     // id -> enriched plan, flattened across every project in the sweep.
     function notesBoardPlanIndex(plansCache) {
