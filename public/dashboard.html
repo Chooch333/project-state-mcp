@@ -2261,13 +2261,15 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       return byId;
     }
 
-    // Same "(needs a name)"-style honesty the Shelf/Map use, but the exact
-    // fallback text specced for this board's rows: real title + a visibly
-    // italicized "not yet in plain words" flag, never hidden.
+    // Unnamed-item placeholder, worded exactly as the Shelf and Map word it —
+    // "(needs a name)" everywhere, no second variant (CD-J-023). The real
+    // title stays visible beside it; the gap is flagged, never hidden.
     function notesBoardPlanTitleHtml(plan) {
       const hasPlain = !!(plan.plain_title && String(plan.plain_title).trim());
       if (hasPlain) return escapeHtml(plan.plain_title);
-      return escapeHtml(plan.title || '(untitled)') + ' <em>(not yet in plain words)</em>';
+      const placeholder = '<em class="buildmap-shelf-needs-name">(needs a name)</em>';
+      const rawTitle = (plan.title && String(plan.title).trim()) ? String(plan.title) : '';
+      return rawTitle ? escapeHtml(rawTitle) + ' ' + placeholder : placeholder;
     }
 
     // Shelf v2's campaign-grouping fold-in rule (CD-J-018), reused for
