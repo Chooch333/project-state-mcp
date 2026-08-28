@@ -2419,52 +2419,65 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       return notesBoardDisclosureRow(row.data, planById, campaignsById);
     }
 
-    function renderNotesBoardHtml(plansCache, campaigns, disclosures) {
+    function renderNotesBoardHtml(plansCache, campaigns, disclosures, questionsResult) {
       const planById = notesBoardPlanIndex(plansCache);
       const campaignsById = {};
       campaigns.forEach(c => { campaignsById[c.id] = c; });
 
       const allPlansFlat = Object.keys(planById).map(id => planById[id]);
-      const byCreatedAsc = (a, b) => new Date(a.created_at) - new Date(b.created_at);
-      const byCreatedDesc = (a, b) => new Date(b.created_at) - new Date(a.created_at);
+      const oldestFirst = (a, b) => new Date(notesBoardRowDate(a)) - new Date(notesBoardRowDate(b));
+      const newestFirst = (a, b) => new Date(notesBoardRowDate(b)) - new Date(notesBoardRowDate(a));
 
-      // "Waiting for a design check" — succeeded plans with no reviewed_at.
+      // Sort disclosures by their action_needed flag. Anything missing or
+      // unrecognized falls to FYI — nothing is dropped, and nothing is
+      // promoted into a louder section than its flag earned.
+      const needsCharles = disclosures.filter(d => d.action_needed === 'needs-charles');
+      const needsDesignCheck = disclosures.filter(d => d.action_needed === 'needs-design-check');
+      const fyiDisclosures = disclosures.filter(d =>
+        d.action_needed !== 'needs-charles' && d.action_needed !== 'needs-design-check');
+
+      const questions = (questionsResult && questionsResult.questions) || [];
+      const questionsError = questionsResult && questionsResult.error;
+
+      // Needs you — open/discussing blocking questions across every project,
+      // plus disclosures flagged needs-charles.
+      const needsYouRows = questions.map(q => notesBoardRow('question', q))
+        .concat(needsCharles.map(d => notesBoardRow('disclosure', d)));
+
+      // Waiting for a design check — disclosures flagged needs-design-check,
+      // plus succeeded plans nobody has checked yet (unchanged logic).
       const designCheckPlans = allPlansFlat.filter(p => p.status === 'succeeded' && !p.reviewed_at);
-      const designCheckGroups = groupRowsByCampaign(
-        designCheckPlans, campaigns, p => p.campaign_id,
-        items => items.slice().sort(byCreatedAsc)
-      );
+      const designCheckRows = needsDesignCheck.map(d => notesBoardRow('disclosure', d))
+        .concat(designCheckPlans.map(p => notesBoardRow('plan', p)));
 
-      // "Other notes" — every disclosure passed in (already status=noted
-      // from the caller's sweep); grouped by its bound plan's campaign.
-      const otherNotesGroups = groupRowsByCampaign(
-        disclosures, campaigns,
-        d => { const p = d.plan_id ? planById[d.plan_id] : null; return p ? p.campaign_id : null; },
-        items => items.slice().sort(byCreatedDesc)
-      );
+      // FYI — everything else that was noted.
+      const fyiRows = fyiDisclosures.map(d => notesBoardRow('disclosure', d));
+
+      const getCampaignId = r => notesBoardRowCampaignId(r, planById);
+      const renderRow = r => notesBoardRowHtml(r, planById, campaignsById);
+
+      function section(heading, rows, sortFn, explainHtml) {
+        let out = '<div class="card">';
+        out += '<h2>' + escapeHtml(heading) + ' <span class="count">' + rows.length + '</span></h2>';
+        if (explainHtml) {
+          out += '<div class="buildmap-shelf-legend">' + explainHtml + '</div>';
+        }
+        groupRowsByCampaign(rows, campaigns, getCampaignId, items => items.slice().sort(sortFn))
+          .forEach(g => {
+            out += buildMapShelfGroup(g.title, '', g.items, 'Nothing here.', renderRow);
+          });
+        out += '</div>';
+        return out;
+      }
 
       let html = '';
-
-      html += '<div class="card">';
-      html += '<h2>Needs you</h2>';
-      html += '<div class="buildmap-shelf-legend">' + escapeHtml(NOTESBOARD_NEEDS_YOU_EXPLAIN) + '</div>';
-      html += '</div>';
-
-      html += '<div class="card">';
-      html += '<h2>Waiting for a design check <span class="count">' + designCheckPlans.length + '</span></h2>';
-      html += '<div class="buildmap-shelf-legend">' + escapeHtml(NOTESBOARD_DESIGN_CHECK_EXPLAIN) + '</div>';
-      designCheckGroups.forEach(g => {
-        html += buildMapShelfGroup(g.title, '', g.items, 'Nothing here.', p => notesBoardDesignCheckRow(p, campaignsById));
-      });
-      html += '</div>';
-
-      html += '<div class="card">';
-      html += '<h2>Other notes <span class="count">' + disclosures.length + '</span></h2>';
-      html += '<div class="buildmap-shelf-legend">' + escapeHtml(NOTESBOARD_OTHER_NOTES_EXPLAIN) + '</div>';
-      otherNotesGroups.forEach(g => {
-        html += buildMapShelfGroup(g.title, '', g.items, 'Nothing here.', d => notesBoardOtherNoteRow(d, planById, campaignsById));
-      });
-      html += '</div>';
+      html += section('Needs you', needsYouRows, newestFirst,
+        questionsError
+          ? '<span class="buildmap-shelf-needs-name">' +
+            escapeHtml(NOTESBOARD_QUESTIONS_ERROR_PREFIX + questionsError) + '</span>'
+          : '');
+      html += section('Waiting for a design check', designCheckRows, oldestFirst, '');
+      html += section('FYI', fyiRows, newestFirst, '');
 
       return html;
     }
