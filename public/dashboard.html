@@ -1868,21 +1868,6 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
         }
       }));
 
-      const ENRICHMENT_FIELDS = ['plain_title', 'plain_summary', 'campaign_id', 'designed_in', 'reviewed_at', 'reviewed_by', 'executor_report'];
-      const allPlansFlat = [];
-      Object.keys(plansCache).forEach(slug => {
-        const entry = plansCache[slug];
-        if (entry && !entry.error && entry.plans) allPlansFlat.push(...entry.plans);
-      });
-      await Promise.all(allPlansFlat.map(async p => {
-        try {
-          const full = await callMcp('get_plan', { plan_id: p.id });
-          ENRICHMENT_FIELDS.forEach(f => { p[f] = full[f]; });
-        } catch (e) {
-          // Leave enrichment fields undefined on this plan; sweep continues.
-        }
-      }));
-
       return plansCache;
     }
 
