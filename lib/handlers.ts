@@ -1758,6 +1758,12 @@ async function updatePlanContent(supabase: SupabaseClient, args: Args): Promise<
       'change_reason was not provided. The edit succeeded but the reason for the change is not captured. ' +
       'Ask the user what prompted this revision and record it — future readers will need to know why the plan evolved.';
   }
+  // Soft enforcement, never a rejection: a build-brief-tagged plan that still lacks a
+  // plain_title or a campaign after this edit gets flagged back to the calling chat.
+  if ((plan.tags ?? []).includes('build-brief') && (!updated.plain_title || !updated.campaign_id)) {
+    response.label_warning =
+      'warning: unnamed builds show as (needs a name) on the board — add your best-shot plain name now via update_plan_labels';
+  }
   return JSON.stringify(response, null, 2);
 }
 
