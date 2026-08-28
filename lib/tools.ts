@@ -499,6 +499,7 @@ export const TOOLS = [
         slug: { type: 'string' },
         title: { type: 'string' },
         purpose: { type: 'string' },
+        layer: { type: 'string', description: 'Platform layer this campaign belongs to (e.g. Intake, Understanding, Operations, Expression) — optional, used for Build Map lane badges.' },
         sort_order: { type: 'number', description: 'Board ordering; lower sorts first. Defaults to 100 if omitted.' },
       },
       required: ['slug', 'title'],
