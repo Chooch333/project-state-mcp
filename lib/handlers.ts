@@ -1674,10 +1674,10 @@ async function updatePlanContent(supabase: SupabaseClient, args: Args): Promise<
     ? args.change_reason.trim()
     : null;
 
-  // Load current plan to get title and current revision number
+  // Load current plan to get title, current revision number, and existing board labels
   const { data: plan, error: fetchErr } = await supabase
     .from('plans')
-    .select('id, title, content, current_revision, source')
+    .select('id, title, content, current_revision, source, tags, plain_title, plain_summary, campaign_id, designed_in')
     .eq('id', args.plan_id)
     .maybeSingle();
   if (fetchErr) throw new Error(fetchErr.message);
@@ -1692,17 +1692,47 @@ async function updatePlanContent(supabase: SupabaseClient, args: Args): Promise<
   // Regenerate embedding from new content so search reflects current state
   const embedding = await embed(composeEmbeddingText.plan(newTitle, args.new_content));
 
+  const updateRow: any = {
+    title: newTitle,
+    content: args.new_content,
+    current_revision: newRevisionNumber,
+    embedding: toPgVector(embedding),
+  };
+
+  // Board-facing labels — same fields as write_plan, but here only the fields the caller
+  // actually passed are touched; an omitted field keeps the plan's existing value (same
+  // pattern as new_title above). campaign is a slug resolved to campaign_id; pass an
+  // empty string or null to explicitly clear it. An unresolvable slug is a caller error
+  // and fails the whole call — that is distinct from omitting campaign entirely, which
+  // just leaves the plan's current campaign untouched.
+  if (args.plain_title !== undefined) {
+    updateRow.plain_title = (typeof args.plain_title === 'string' && args.plain_title.trim().length > 0)
+      ? args.plain_title.trim() : null;
+  }
+  if (args.plain_summary !== undefined) {
+    updateRow.plain_summary = (typeof args.plain_summary === 'string' && args.plain_summary.trim().length > 0)
+      ? args.plain_summary.trim() : null;
+  }
+  if (args.designed_in !== undefined) {
+    updateRow.designed_in = (typeof args.designed_in === 'string' && args.designed_in.trim().length > 0)
+      ? args.designed_in.trim() : null;
+  }
+  if (args.campaign !== undefined) {
+    if (args.campaign === null || (typeof args.campaign === 'string' && args.campaign.trim().length === 0)) {
+      updateRow.campaign_id = null;
+    } else if (typeof args.campaign === 'string') {
+      updateRow.campaign_id = await resolveCampaignId(supabase, args.campaign.trim());
+    } else {
+      throw new Error('campaign must be a string slug (or empty string/null to clear it)');
+    }
+  }
+
   // Update the plan row
   const { data: updated, error: updateErr } = await supabase
     .from('plans')
-    .update({
-      title: newTitle,
-      content: args.new_content,
-      current_revision: newRevisionNumber,
-      embedding: toPgVector(embedding),
-    })
+    .update(updateRow)
     .eq('id', args.plan_id)
-    .select('id, title, status, current_revision, source, created_at')
+    .select('id, title, status, current_revision, source, created_at, plain_title, plain_summary, campaign_id, designed_in')
     .single();
   if (updateErr) throw new Error(updateErr.message);
 
