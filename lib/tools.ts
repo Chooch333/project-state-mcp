@@ -389,7 +389,7 @@ export const TOOLS = [
   },
   {
     name: 'update_plan_content',
-    description: 'Edit a plan\'s content, creating a new revision snapshot. Every time you call this, the plan\'s current_revision increments and a row is added to plan_revisions capturing the new state. Use when the plan has evolved — the user iterated on the approach, refined the scope, or added detail. Do NOT use for status transitions (draft → queued → running → succeeded/failed/blocked/abandoned); use update_plan_status for that. Always try to supply change_reason — a short explanation of why the plan evolved. If unclear, ask the user; the response will warn you if you leave it empty. new_title is optional and defaults to the current title.',
+    description: 'Edit a plan\'s content, creating a new revision snapshot. Every time you call this, the plan\'s current_revision increments and a row is added to plan_revisions capturing the new state. Use when the plan has evolved — the user iterated on the approach, refined the scope, or added detail. Do NOT use for status transitions (draft → queued → running → succeeded/failed/blocked/abandoned); use update_plan_status for that. Always try to supply change_reason — a short explanation of why the plan evolved. If unclear, ask the user; the response will warn you if you leave it empty. new_title is optional and defaults to the current title. Also accepts optional board-facing labels — plain_title, plain_summary, designed_in, and campaign (a slug — see list_campaigns/create_campaign) — only the fields you actually pass are changed, everything else keeps its current value; pass an empty string or null for campaign to explicitly clear it, and note an unrecognized campaign slug is a caller error, never silently dropped. Campaigns are DA-chat authority: DA/planning chats may rename, recategorize, or fork a new campaign out of an existing one freely, at their own discretion — logged as judgment calls via post_judgment_call, never needing Charles\'s approval. Soft enforcement is a hard design requirement: this call NEVER fails for missing labels — but if the plan is tagged build-brief and still lacks a plain_title or a campaign after the edit, the response carries an additional label_warning string addressed to the calling chat (never to Charles), instructing it to add its best-shot plain name via update_plan_labels.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -398,6 +398,10 @@ export const TOOLS = [
         new_title: { type: 'string', description: 'Optional new title. Defaults to the current title if omitted.' },
         change_reason: { type: 'string', description: 'Why the plan was edited. Strongly preferred; ask the user if unclear; never fabricate.' },
         source: { type: 'string', description: 'Who/what made this revision. Defaults to the plan\'s existing source.' },
+        plain_title: { type: 'string', description: 'Plain-English board-facing name for the build. Only updated if passed.' },
+        plain_summary: { type: 'string', description: 'One-sentence plain-English summary for the board. Only updated if passed.' },
+        campaign: { type: 'string', description: 'Campaign slug to file this plan under (see list_campaigns). Only updated if passed; empty string or null clears it. Unrecognized slug errors rather than being silently dropped.' },
+        designed_in: { type: 'string', description: 'Free-text pointer to where this plan was designed. Only updated if passed.' },
       },
       required: ['plan_id', 'new_content'],
     },
