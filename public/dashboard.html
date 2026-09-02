@@ -2575,6 +2575,174 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     }
 
     // ─────────────────────────────────────────────────────────
+    // Intake tab (BB-2026-09-02-yt-intake-tracker-and-hardening) — reads
+    // the yt-relay intake tracker's own public /api/state endpoint
+    // directly. No MCP token, no project scoping: this is a separate
+    // system's status board, not Project State data, wired as a Program
+    // tab (like Notes Board) but skipping callMcp entirely.
+    // ─────────────────────────────────────────────────────────
+
+    // Per-channel expand/collapse state for this browser session only — no
+    // storage, since this dashboard may run in contexts without reliable
+    // localStorage. Keyed by channel name; a name not present here is
+    // collapsed (the default).
+    const intakeChannelOpen = {};
+    // Last successfully fetched payload, so a channel-row toggle can
+    // re-render from cache instead of re-hitting the endpoint on every
+    // click.
+    let intakeLastData = null;
+
+    function intakeTimeAgo(iso) {
+      if (!iso) return 'never';
+      const then = new Date(iso).getTime();
+      if (isNaN(then)) return 'never';
+      const diffMs = Date.now() - then;
+      const mins = Math.floor(diffMs / 60000);
+      if (mins < 1) return 'just now';
+      if (mins < 60) return mins + 'm ago';
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return hours + 'h ago';
+      const days = Math.floor(hours / 24);
+      return days + 'd ago';
+    }
+
+    function intakeHealthClass(overall) {
+      if (overall === 'ok') return 'good';
+      if (overall === 'quiet') return 'warn';
+      return 'urgent'; // 'trouble' and anything unrecognized
+    }
+
+    function intakeLink(url, text) {
+      const label = escapeHtml(text);
+      if (!url) return label;
+      return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener">' + label + '</a>';
+    }
+
+    function intakeWaitingCount(channels, phoneTapped) {
+      let n = 0;
+      channels.forEach(c => (c.videos || []).forEach(v => { if (v.display_status === 'Waiting') n++; }));
+      (phoneTapped || []).forEach(v => { if (v.display_status === 'Waiting') n++; });
+      return n;
+    }
+
+    function intakeHealthStripHtml(health, waitingCount) {
+      const cls = intakeHealthClass(health.overall);
+      const counts = health.counts || {};
+      const feeds = health.feeds_dark ? 'dark' : 'ok';
+      let html = '<div class="card intake-health intake-health-' + cls + '">';
+      html += '<div class="status-line">';
+      html += 'Relay last seen ' + escapeHtml(intakeTimeAgo(health.relay_last_seen));
+      html += ' · ' + waitingCount + ' waiting';
+      html += ' · ' + (counts.blocked || 0) + ' blocked';
+      html += ' · ' + (counts.stalled || 0) + ' stalled';
+      html += ' · ' + (counts.orphaned || 0) + ' orphaned';
+      html += ' · feeds ' + feeds;
+      html += '</div>';
+      html += '</div>';
+      return html;
+    }
+
+    function intakeVideoRowHtml(video, showPosted) {
+      const title = video.title || video.video_id;
+      const posted = (showPosted && video.published_at) ? new Date(video.published_at).toLocaleString() : '—';
+      const fetched = video.done_at ? new Date(video.done_at).toLocaleString() : '—';
+      const inGraph = video.ingested_at ? new Date(video.ingested_at).toLocaleString() : '—';
+      let status = escapeHtml(video.display_status || '');
+      if (video.failure_summary) status += ' (' + escapeHtml(video.failure_summary) + ')';
+      let html = '<tr>';
+      html += '<td>' + intakeLink(video.url, title) + '</td>';
+      html += '<td>' + posted + '</td>';
+      html += '<td>' + fetched + '</td>';
+      html += '<td>' + inGraph + '</td>';
+      html += '<td>' + status + '</td>';
+      html += '</tr>';
+      return html;
+    }
+
+    function intakeVideoTableHtml(videos, showPosted) {
+      const sorted = (videos || []).slice().sort((a, b) => new Date(b.requested_at) - new Date(a.requested_at));
+      if (sorted.length === 0) return '<div class="empty">No videos.</div>';
+      let html = '<table class="intake-table"><thead><tr>';
+      html += '<th>Title</th><th>Posted</th><th>Fetched</th><th>In graph</th><th>Status</th>';
+      html += '</tr></thead><tbody>';
+      sorted.forEach(v => { html += intakeVideoRowHtml(v, showPosted); });
+      html += '</tbody></table>';
+      return html;
+    }
+
+    function intakeChannelLastPosted(videos) {
+      let latest = null;
+      (videos || []).forEach(v => {
+        if (!v.published_at) return;
+        if (!latest || new Date(v.published_at) > new Date(latest)) latest = v.published_at;
+      });
+      return latest;
+    }
+
+    function intakeChannelRowHtml(channel, isOpen) {
+      const videos = channel.videos || [];
+      const lastPosted = intakeChannelLastPosted(videos);
+      const lastFeedOk = channel.last_feed_ok_at ? intakeTimeAgo(channel.last_feed_ok_at) : '—';
+      let html = '<div class="item intake-channel-row" data-channel="' + escapeHtml(channel.name) + '">';
+      html += '<div class="intake-channel-header" role="button" tabindex="0" aria-expanded="' + (isOpen ? 'true' : 'false') + '">';
+      html += '<div class="item-title">' + (isOpen ? '▾ ' : '▸ ') + intakeLink(channel.url, channel.name) + '</div>';
+      html += '<div class="item-meta">';
+      html += '<span class="tag">' + escapeHtml(channel.category || '') + '</span>';
+      html += '<span>' + videos.length + ' video' + (videos.length === 1 ? '' : 's') + '</span>';
+      html += '<span>last posted ' + (lastPosted ? escapeHtml(new Date(lastPosted).toLocaleString()) : '—') + '</span>';
+      html += '<span>last feed OK ' + escapeHtml(lastFeedOk) + '</span>';
+      html += '</div>';
+      html += '</div>';
+      if (isOpen) {
+        html += '<div class="intake-channel-body">' + intakeVideoTableHtml(videos, true) + '</div>';
+      }
+      html += '</div>';
+      return html;
+    }
+
+    function intakeBuildHtml(data) {
+      const channels = data.channels || [];
+      const phoneTapped = data.phone_tapped || [];
+      const health = data.health || {};
+      const waiting = intakeWaitingCount(channels, phoneTapped);
+
+      let html = intakeHealthStripHtml(health, waiting);
+
+      html += '<div class="card"><h2>Channels <span class="count">' + channels.length + '</span></h2>';
+      if (channels.length === 0) {
+        html += '<div class="empty">No channels.</div>';
+      } else {
+        channels.forEach(c => { html += intakeChannelRowHtml(c, !!intakeChannelOpen[c.name]); });
+      }
+      html += '</div>';
+
+      html += '<div class="card"><h2>Shared from phone <span class="count">' + phoneTapped.length + '</span></h2>';
+      html += intakeVideoTableHtml(phoneTapped, false);
+      html += '</div>';
+
+      return html;
+    }
+
+    // Fetches the yt-relay intake tracker's public status directly (no MCP
+    // token, not project-scoped) and renders the health strip, per-channel
+    // collapsible tables, and the phone-tapped table. On any failure —
+    // network error, non-200, bad JSON — renders exactly one line of text
+    // instead of throwing or leaving the tab blank.
+    async function renderIntakeTab() {
+      const el = document.getElementById('intake-content');
+      el.innerHTML = '<div class="loading">Loading...</div>';
+      try {
+        const resp = await fetch(YT_RELAY_STATE_URL);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        intakeLastData = data;
+        el.innerHTML = intakeBuildHtml(data);
+      } catch (e) {
+        el.innerHTML = '<div class="error">Intake tracker unreachable — yt-relay-ten.vercel.app/api/state</div>';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────
     // About tab — render the embedded doc
     // ─────────────────────────────────────────────────────────
     function renderAbout() {
