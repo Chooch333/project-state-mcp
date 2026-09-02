@@ -2646,6 +2646,28 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     // hash-based deep-linking, not implemented today).
     setMachineRoomExpanded(MACHINE_ROOM_TABS.includes(currentTab));
 
+    // Intake tab — channel rows toggle open/closed from cached data (no
+    // re-fetch on every click); a click on a link inside the header still
+    // navigates normally instead of toggling.
+    document.getElementById('intake-content').addEventListener('click', (e) => {
+      if (e.target.tagName === 'A') return;
+      const header = e.target.closest('.intake-channel-header');
+      if (!header) return;
+      const row = header.closest('.intake-channel-row');
+      if (!row) return;
+      intakeChannelOpen[row.dataset.channel] = !intakeChannelOpen[row.dataset.channel];
+      if (intakeLastData) {
+        document.getElementById('intake-content').innerHTML = intakeBuildHtml(intakeLastData);
+      }
+    });
+    document.getElementById('intake-content').addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const header = e.target.closest && e.target.closest('.intake-channel-header');
+      if (!header) return;
+      e.preventDefault();
+      header.click();
+    });
+
     document.getElementById('project-selector').addEventListener('change', (e) => {
       currentProject = e.target.value;
       localStorage.setItem('projectStateCurrentProject', currentProject);
