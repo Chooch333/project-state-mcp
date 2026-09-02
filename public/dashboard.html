@@ -700,6 +700,38 @@
       background: color-mix(in srgb, var(--accent) 8%, transparent);
       transition: background 0.3s ease;
     }
+
+    /* Intake tab (BB-2026-09-02-yt-intake-tracker-and-hardening) — the
+       yt-relay intake tracker's status board. No <table> convention existed
+       anywhere else in this file (every other tab renders div-based .item
+       rows), so this is a minimal table style built from the same design
+       tokens rather than a new framework. */
+    .intake-health { border-left: 4px solid var(--border-strong); }
+    .intake-health-good { border-left-color: var(--good); background: var(--good-bg); color: var(--good); }
+    .intake-health-warn { border-left-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+    .intake-health-urgent { border-left-color: var(--urgent); background: var(--urgent-bg); color: var(--urgent); }
+    .intake-health .status-line { font-weight: 500; color: inherit; }
+    .intake-channel-header { cursor: pointer; }
+    .intake-channel-header:hover .item-title { color: var(--accent); }
+    .intake-channel-body { margin-top: 10px; }
+    .intake-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .intake-table th {
+      text-align: left;
+      padding: 6px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-subtle);
+      border-bottom: 1px solid var(--border-strong);
+    }
+    .intake-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      vertical-align: top;
+    }
+    .intake-table tr:last-child td { border-bottom: none; }
     .buildmap-toast {
       position: fixed;
       bottom: 24px;
