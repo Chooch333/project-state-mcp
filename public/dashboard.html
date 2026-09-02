@@ -889,6 +889,10 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     // MCP client
     // ─────────────────────────────────────────────────────────
     const TOKEN_KEY = 'projectStateMcpToken';
+    // Intake tab (BB-2026-09-02-yt-intake-tracker-and-hardening) — the
+    // yt-relay intake tracker's own public status endpoint. Plain GET, no
+    // MCP token, not project-scoped: a separate system's status board.
+    const YT_RELAY_STATE_URL = 'https://yt-relay-ten.vercel.app/api/state';
     let rpcId = 0;
     let currentProject = localStorage.getItem('projectStateCurrentProject') || null;
 
