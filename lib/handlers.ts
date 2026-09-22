@@ -132,6 +132,14 @@ export async function callTool(name: string, args: Args): Promise<string> {
       return disposeJudgmentCall(supabase, args);
     case 'describe_capabilities':
       return describeCapabilities(supabase, args);
+    case 'file_punch_item':
+      return filePunchItem(supabase, args);
+    case 'list_punch_items':
+      return listPunchItems(supabase, args);
+    case 'add_punch_note':
+      return addPunchNote(supabase, args);
+    case 'set_punch_status':
+      return setPunchStatus(supabase, args);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -2329,4 +2337,245 @@ async function disposeJudgmentCall(supabase: SupabaseClient, args: Args): Promis
   if (messageError) throw new Error(messageError.message);
 
   return JSON.stringify({ ...updated, message: messageRow }, null, 2);
+}
+
+// ─────────────────────────────────────────────────────────
+// Punch list (Inspector/Repairer workflow) — BB-2026-09-21-inspector-repairer
+//
+// punch_items / punch_item_notes / punch_checkpoints are a deliberately
+// GLOBAL bucket — unlike every other table in this system, punch_items has
+// no project_id and these tools never filter or param by project. display_id
+// (e.g. PL-001) is auto-assigned by a database trigger on insert; never set
+// it from here. punch_item_notes is append-only (UPDATE/DELETE blocked by a
+// trigger) — writes here are permanent additions to the thread, never edits.
+// ─────────────────────────────────────────────────────────
+
+const PUNCH_KIND = ['doctrine', 'map', 'label', 'ledger', 'other'];
+const PUNCH_TIER = ['auto', 'needs-brief'];
+const PUNCH_STATUS = ['open', 'applied', 'verified', 'held', 'needs-brief', 'refused', 'failed', 'regressed'];
+const PUNCH_NOTE_AUTHOR = ['inspector', 'repairer', 'da', 'charles'];
+const PUNCH_ITEM_FIELDS =
+  'id, display_id, kind, target_repo, target_path, target_section, change_summary, draft_text, evidence, tier, status, adv_id, plain_summary, applied_commit, created_at, updated_at, closed_at';
+
+// item accepts either a punch_items.display_id (e.g. "PL-003") or a raw uuid.
+// A value that does not look like a uuid is resolved as a display_id.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function resolvePunchItem(supabase: SupabaseClient, itemRef: unknown): Promise<any> {
+  if (typeof itemRef !== 'string' || itemRef.trim().length === 0) {
+    throw new Error('item is required — pass a punch_items display_id (e.g. "PL-003") or uuid.');
+  }
+  const ref = itemRef.trim();
+  const column = UUID_RE.test(ref) ? 'id' : 'display_id';
+  const { data, error } = await supabase
+    .from('punch_items')
+    .select(PUNCH_ITEM_FIELDS)
+    .eq(column, ref)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error(`No punch item found for '${itemRef}' (looked up by ${column}).`);
+  return data;
+}
+
+async function filePunchItem(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (!PUNCH_KIND.includes(args.kind)) {
+    throw new Error(`kind must be one of ${PUNCH_KIND.join(', ')} (got "${args.kind}")`);
+  }
+  if (typeof args.change_summary !== 'string' || args.change_summary.trim().length === 0) {
+    throw new Error('change_summary is required');
+  }
+  if (!PUNCH_TIER.includes(args.tier)) {
+    throw new Error(`tier must be one of ${PUNCH_TIER.join(', ')} (got "${args.tier}")`);
+  }
+
+  const plainSummary = (typeof args.plain_summary === 'string' && args.plain_summary.trim().length > 0)
+    ? args.plain_summary.trim()
+    : null;
+
+  const insertRow: any = {
+    kind: args.kind,
+    target_repo: args.target_repo ?? null,
+    target_path: args.target_path ?? null,
+    target_section: args.target_section ?? null,
+    change_summary: args.change_summary,
+    draft_text: args.draft_text ?? null,
+    evidence: Array.isArray(args.evidence) ? args.evidence : null,
+    tier: args.tier,
+    adv_id: args.adv_id ?? null,
+    plain_summary: plainSummary,
+  };
+
+  const { data: item, error: itemError } = await supabase
+    .from('punch_items')
+    .insert(insertRow)
+    .select(PUNCH_ITEM_FIELDS)
+    .single();
+  if (itemError) throw new Error(itemError.message);
+
+  // Always write a first inspector note recording the reasoning that filed this item.
+  const { data: note, error: noteError } = await supabase
+    .from('punch_item_notes')
+    .insert({ item_id: item.id, author: 'inspector', body: args.change_summary })
+    .select('id, item_id, author, body, created_at')
+    .single();
+  if (noteError) throw new Error(noteError.message);
+
+  const response: any = { item, note };
+  // Soft enforcement, never a rejection: an item with no plain_summary still files fine —
+  // the warning just asks the calling chat to supply one next time.
+  if (!plainSummary) {
+    response.warning =
+      'warning: this punch item has no plain_summary — add your own best-shot one-sentence summary next time via file_punch_item';
+  }
+  return JSON.stringify(response, null, 2);
+}
+
+async function listPunchItems(supabase: SupabaseClient, args: Args): Promise<string> {
+  let query = supabase
+    .from('punch_items')
+    .select(PUNCH_ITEM_FIELDS)
+    .order('created_at', { ascending: true });
+
+  if (Array.isArray(args.status) && args.status.length > 0) {
+    query = query.in('status', args.status);
+  }
+  if (typeof args.tier === 'string' && args.tier.trim().length > 0) {
+    query = query.eq('tier', args.tier.trim());
+  }
+  if (typeof args.kind === 'string' && args.kind.trim().length > 0) {
+    query = query.eq('kind', args.kind.trim());
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  let items: any[] = data ?? [];
+
+  const includeNotes = args.include_notes === true;
+  if (includeNotes && items.length > 0) {
+    const ids = items.map((i: any) => i.id);
+    const { data: notes, error: notesError } = await supabase
+      .from('punch_item_notes')
+      .select('id, item_id, author, body, created_at')
+      .in('item_id', ids)
+      .order('created_at', { ascending: true });
+    if (notesError) throw new Error(notesError.message);
+
+    const byItem = new Map<string, any[]>();
+    (notes ?? []).forEach((n: any) => {
+      const list = byItem.get(n.item_id) ?? [];
+      list.push(n);
+      byItem.set(n.item_id, list);
+    });
+    items = items.map((i: any) => ({ ...i, notes: byItem.get(i.id) ?? [] }));
+  }
+
+  return JSON.stringify({
+    count: items.length,
+    include_notes: includeNotes,
+    items,
+  }, null, 2);
+}
+
+async function addPunchNote(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (!PUNCH_NOTE_AUTHOR.includes(args.author)) {
+    throw new Error(`author must be one of ${PUNCH_NOTE_AUTHOR.join(', ')} (got "${args.author}")`);
+  }
+  if (typeof args.body !== 'string' || args.body.trim().length === 0) {
+    throw new Error('body is required');
+  }
+
+  const item = await resolvePunchItem(supabase, args.item);
+
+  const { data: note, error } = await supabase
+    .from('punch_item_notes')
+    .insert({ item_id: item.id, author: args.author, body: args.body })
+    .select('id, item_id, author, body, created_at')
+    .single();
+  if (error) throw new Error(error.message);
+
+  return JSON.stringify({
+    note,
+    item_display_id: item.display_id,
+    item_status: item.status,
+  }, null, 2);
+}
+
+// The fixed prefix set_punch_status writes on every note it creates. The 'verified'
+// same-author check scans for notes starting with this exact literal — keep the two
+// in lockstep if this ever changes.
+const APPLIED_NOTE_PREFIX = 'Status → applied';
+
+async function setPunchStatus(supabase: SupabaseClient, args: Args): Promise<string> {
+  if (!PUNCH_STATUS.includes(args.new_status)) {
+    throw new Error(`new_status must be one of ${PUNCH_STATUS.join(', ')} (got "${args.new_status}")`);
+  }
+  if (!PUNCH_NOTE_AUTHOR.includes(args.author)) {
+    throw new Error(`author must be one of ${PUNCH_NOTE_AUTHOR.join(', ')} (got "${args.author}")`);
+  }
+  if (typeof args.note !== 'string' || args.note.trim().length === 0) {
+    throw new Error('note is required — plain-English reasoning for the status transition.');
+  }
+
+  const item = await resolvePunchItem(supabase, args.item);
+
+  const appliedCommit = (typeof args.applied_commit === 'string' && args.applied_commit.trim().length > 0)
+    ? args.applied_commit.trim()
+    : null;
+
+  // Rule 1: applied_commit is required when transitioning to 'applied'. Checked before
+  // any write happens.
+  if (args.new_status === 'applied' && !appliedCommit) {
+    throw new Error('applied_commit is required when new_status is "applied". Nothing was written.');
+  }
+
+  // Rule 2: verifying is restricted to author 'inspector', and the same author that
+  // applied an item may not also verify it. Checked before any write happens.
+  if (args.new_status === 'verified') {
+    if (args.author !== 'inspector') {
+      throw new Error(
+        `set_punch_status to "verified" requires author "inspector" (got "${args.author}"). Nothing was written.`
+      );
+    }
+    const { data: lastApplied, error: lastAppliedError } = await supabase
+      .from('punch_item_notes')
+      .select('id, author, body, created_at')
+      .eq('item_id', item.id)
+      .like('body', `${APPLIED_NOTE_PREFIX}%`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lastAppliedError) throw new Error(lastAppliedError.message);
+    if (lastApplied && lastApplied.author === args.author) {
+      throw new Error(
+        `cannot verify: same author that applied this item (both "${args.author}"). Nothing was written.`
+      );
+    }
+  }
+
+  const noteBody = `Status → ${args.new_status}. ${args.note.trim()}`;
+  const { data: note, error: noteError } = await supabase
+    .from('punch_item_notes')
+    .insert({ item_id: item.id, author: args.author, body: noteBody })
+    .select('id, item_id, author, body, created_at')
+    .single();
+  if (noteError) throw new Error(noteError.message);
+
+  const update: any = {
+    status: args.new_status,
+    updated_at: new Date().toISOString(),
+  };
+  if (args.new_status === 'applied') update.applied_commit = appliedCommit;
+  if (args.new_status === 'verified' || args.new_status === 'refused') {
+    update.closed_at = new Date().toISOString();
+  }
+
+  const { data: updatedItem, error: updateError } = await supabase
+    .from('punch_items')
+    .update(update)
+    .eq('id', item.id)
+    .select(PUNCH_ITEM_FIELDS)
+    .single();
+  if (updateError) throw new Error(updateError.message);
+
+  return JSON.stringify({ item: updatedItem, note }, null, 2);
 }
