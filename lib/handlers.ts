@@ -2516,6 +2516,24 @@ async function setPunchStatus(supabase: SupabaseClient, args: Args): Promise<str
     throw new Error('note is required — plain-English reasoning for the status transition.');
   }
 
+  // Role enforcement (decision A-077 / Amendment 1, BB-2026-09-21-inspector-repairer):
+  // only the Repairer may move an item into applied/held/failed/needs-brief; only
+  // the Inspector may move an item into verified/regressed/open (re-open); refused
+  // is allowed from either author. Checked before any write. The existing
+  // "Status → applied" prefix scan (below) stays as a secondary check on verified.
+  const REPAIRER_ONLY_STATUS = ['applied', 'held', 'failed', 'needs-brief'];
+  const INSPECTOR_ONLY_STATUS = ['verified', 'regressed', 'open'];
+  if (REPAIRER_ONLY_STATUS.includes(args.new_status) && args.author !== 'repairer') {
+    throw new Error(
+      `set_punch_status to "${args.new_status}" requires author "repairer" (got "${args.author}"). Nothing was written.`
+    );
+  }
+  if (INSPECTOR_ONLY_STATUS.includes(args.new_status) && args.author !== 'inspector') {
+    throw new Error(
+      `set_punch_status to "${args.new_status}" requires author "inspector" (got "${args.author}"). Nothing was written.`
+    );
+  }
+
   const item = await resolvePunchItem(supabase, args.item);
 
   const appliedCommit = (typeof args.applied_commit === 'string' && args.applied_commit.trim().length > 0)
@@ -2528,14 +2546,10 @@ async function setPunchStatus(supabase: SupabaseClient, args: Args): Promise<str
     throw new Error('applied_commit is required when new_status is "applied". Nothing was written.');
   }
 
-  // Rule 2: verifying is restricted to author 'inspector', and the same author that
-  // applied an item may not also verify it. Checked before any write happens.
+  // Rule 2: verifying is restricted to author 'inspector' (now enforced by the role
+  // block above), and the same author that applied an item may not also verify it.
+  // Checked before any write happens.
   if (args.new_status === 'verified') {
-    if (args.author !== 'inspector') {
-      throw new Error(
-        `set_punch_status to "verified" requires author "inspector" (got "${args.author}"). Nothing was written.`
-      );
-    }
     const { data: lastApplied, error: lastAppliedError } = await supabase
       .from('punch_item_notes')
       .select('id, author, body, created_at')
