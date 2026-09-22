@@ -594,4 +594,69 @@ export const TOOLS = [
       required: ['display_id', 'disposition', 'message'],
     },
   },
+  {
+    name: 'file_punch_item',
+    description: 'File a new Inspector/Repairer punch-list item — a concrete, evidence-backed change proposal against doctrine, a map, a label, or a ledger (or "other"). This is the entry point for the Inspector→Repairer punch-list workflow: every item starts in status \'open\' and gets a global, auto-assigned display_id (e.g. PL-001) from a database trigger on punch_items — never pass display_id yourself, and never expect it to be scoped per-project (punch_items has no project_id; it is a deliberately global list). Required: kind (one of doctrine/map/label/ledger/other), change_summary (what should change and why, in plain terms), and tier (\'auto\' — safe for the Repairer to apply on its own authority — or \'needs-brief\' — requires a build brief first). Optional: target_repo/target_path/target_section to pin down exactly what this item touches, draft_text (a drafted replacement if you already have one), evidence (an array of supporting strings — quotes, links, reasoning), and adv_id (an advisor/session identifier this item traces back to). plain_summary is optional but encouraged — a one-sentence plain-English gloss for anyone scanning the punch list; omitting it never blocks the call, but the response carries a warning asking you to add one next time (same soft-enforcement pattern as post_judgment_call). This call ALWAYS writes a first inspector note automatically: right after the item is created, a punch_item_notes row is inserted with author \'inspector\' and body set to your change_summary text, so every item\'s note thread starts with the reasoning that filed it. Returns the created item (including its assigned display_id) and that first note.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['doctrine', 'map', 'label', 'ledger', 'other'] },
+        change_summary: { type: 'string', description: 'What should change and why, in plain terms. Also becomes the body of the automatic first inspector note.' },
+        tier: { type: 'string', enum: ['auto', 'needs-brief'], description: '"auto" = safe for the Repairer to apply on its own authority. "needs-brief" = requires a build brief before it can be applied.' },
+        target_repo: { type: 'string' },
+        target_path: { type: 'string' },
+        target_section: { type: 'string' },
+        draft_text: { type: 'string', description: 'A drafted replacement for the target, if you already have one.' },
+        evidence: { type: 'array', items: { type: 'string' }, description: 'Supporting strings — quotes, links, reasoning — backing this item.' },
+        adv_id: { type: 'string', description: 'Advisor/session identifier this item traces back to.' },
+        plain_summary: { type: 'string', description: 'One-sentence plain-English summary of this item. Optional but encouraged — omitting it never rejects the call, just triggers a soft warning in the response.' },
+      },
+      required: ['kind', 'change_summary', 'tier'],
+    },
+  },
+  {
+    name: 'list_punch_items',
+    description: 'List punch-list items (as created by file_punch_item), ordered oldest-first by created_at — the working queue for Inspector/Repairer review. All filters are optional and are ANDed together when given: status (an array of status strings — pass e.g. ["open"] or ["open","needs-brief"] to restrict to those; omit to see every status), tier (a single value, "auto" or "needs-brief"), and kind (a single value, one of doctrine/map/label/ledger/other). Pass include_notes=true to also fetch each returned item\'s full punch_item_notes thread (ordered oldest-first) and attach it as a notes array on that item — useful for reviewing an item\'s full history in one call. Defaults to include_notes=false to keep the default listing compact. Returns the array of matching items, each carrying a notes array only when include_notes was true. Note: punch_items has no project_id — this is a global list across the whole punch-list workflow, not scoped per project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'array',
+          items: { type: 'string', enum: ['open', 'applied', 'verified', 'held', 'needs-brief', 'refused', 'failed', 'regressed'] },
+          description: 'Restrict to rows whose status is in this list. Omit to include every status.',
+        },
+        tier: { type: 'string', enum: ['auto', 'needs-brief'] },
+        kind: { type: 'string', enum: ['doctrine', 'map', 'label', 'ledger', 'other'] },
+        include_notes: { type: 'boolean', description: 'If true, attach each item\'s full punch_item_notes thread (oldest-first) as a notes array. Default false.' },
+      },
+    },
+  },
+  {
+    name: 'add_punch_note',
+    description: 'Append one note to a punch item\'s thread (punch_item_notes) without changing its status. Use this for commentary, questions, or progress updates that are not themselves a status transition; use set_punch_status instead when the note should also move the item\'s status (that call writes its own structured note as part of the transition). item accepts EITHER the item\'s display_id (e.g. "PL-003") OR its raw uuid — if the value does not look like a uuid it is resolved as a display_id; a value that resolves to neither returns a clear error rather than a raw database error, and nothing is written. author must be one of the notes author enum (inspector/repairer/da/charles) and body is the note text — both required. Returns the newly created note plus the parent item\'s current status, so the caller can confirm at a glance where the item stands. Note: punch_item_notes is strictly append-only — a database trigger blocks any UPDATE or DELETE on this table, so notes written here (through this tool or any other) can never be edited or removed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        item: { type: 'string', description: 'The punch item\'s display_id (e.g. "PL-003") or raw uuid. A non-uuid value is resolved as a display_id.' },
+        author: { type: 'string', enum: ['inspector', 'repairer', 'da', 'charles'] },
+        body: { type: 'string' },
+      },
+      required: ['item', 'author', 'body'],
+    },
+  },
+  {
+    name: 'set_punch_status',
+    description: 'Transition a punch item\'s status and record why, in one call. item accepts EITHER the item\'s display_id (e.g. "PL-003") OR its raw uuid, resolved the same way as add_punch_note; an item that cannot be resolved returns a clear error and nothing is written. new_status must be one of the punch_items status enum (open/applied/verified/held/needs-brief/refused/failed/regressed). author (inspector/repairer/da/charles) and note (plain-English reasoning for this transition) are both required. Two hard rules are checked BEFORE anything is written: (1) applied_commit is REQUIRED when new_status is "applied" — if it is missing or empty, the call is rejected and nothing is written; pass the commit SHA (or equivalent) that applied the change. (2) Verifying is restricted: new_status "verified" is only allowed when author is "inspector", and is further rejected if the most recent note on this item recording an "applied" transition (a note whose body starts with the literal prefix "Status → applied") was itself written by the SAME author as this call (i.e. the author who applied an item cannot also be the one who verifies it) — if either check fails, a clear error is returned and nothing is written. When neither rule blocks the call: a structured note is written (author = your author, body = "Status → " + new_status + ". " + your note text — this fixed prefix is exactly what the verified-rule scans for on future calls, so it is always written this way, never customized), and then the item is updated — status = new_status, updated_at = now(), plus applied_commit when new_status is "applied", plus closed_at = now() when new_status is "verified" or "refused" (the two terminal statuses this tool recognizes; "failed" is deliberately NOT treated as terminal since a failed item may be retried by the Repairer). Returns the updated item and the new note.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        item: { type: 'string', description: 'The punch item\'s display_id (e.g. "PL-003") or raw uuid. A non-uuid value is resolved as a display_id.' },
+        new_status: { type: 'string', enum: ['open', 'applied', 'verified', 'held', 'needs-brief', 'refused', 'failed', 'regressed'] },
+        author: { type: 'string', enum: ['inspector', 'repairer', 'da', 'charles'] },
+        note: { type: 'string', description: 'Plain-English reasoning for this status transition. Always required.' },
+        applied_commit: { type: 'string', description: 'Required (and must be non-empty) when new_status is "applied". Ignored/optional for every other new_status.' },
+      },
+      required: ['item', 'new_status', 'author', 'note'],
+    },
+  },
 ] as const;
