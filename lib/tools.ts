@@ -420,13 +420,41 @@ export const TOOLS = [
   },
   {
     name: 'update_plan_status',
-    description: 'Transition a plan through its lifecycle: draft (initial write) → queued (approved, on the shelf) → running (orchestrator claimed it) → succeeded | failed | blocked | abandoned. failed and blocked are not terminal — a plan may be re-queued after review or after a hard gate clears.',
+    description: 'Transition a plan through its lifecycle: draft (initial write) → queued (approved, on the shelf) → running (orchestrator claimed it) → succeeded | failed | blocked | abandoned. failed and blocked are not terminal — a plan may be re-queued after review or after a hard gate clears. Marking a plan succeeded now requires a done_receipt: the Session Log id documenting the close, plus an acceptance entry for every acceptance check, each resolved as either pass (with evidence) or handed-off (to a new follow-up plan). This is enforced by a database trigger on plans (BB-2026-09-23-done-receipt) — if the receipt is missing or incomplete, the write is refused and no status change is applied; the refusal is a plain-English error naming exactly which rule failed. This tool does not validate the receipt\'s shape itself; the database is the sole enforcer.',
     inputSchema: {
       type: 'object',
       properties: {
         plan_id: { type: 'string' },
         new_status: { type: 'string', enum: ['queued', 'running', 'succeeded', 'failed', 'blocked', 'abandoned'] },
         executor_report: { type: 'string' },
+        done_receipt: {
+          type: 'object',
+          description: 'Required by the database when new_status is "succeeded" (see BB-2026-09-23-done-receipt). Names the Session Log this build closed with and accounts for every acceptance criterion — either passed with evidence, or explicitly handed off to a follow-up plan. Passed through to the database as-is; not validated client-side. An incomplete or missing receipt on a succeeded transition is refused by the database trigger with a rule-specific error.',
+          properties: {
+            session_log: { type: 'string', description: 'Identifier/path of the Session Log entry documenting this build\'s close.' },
+            acceptance: {
+              type: 'array',
+              description: 'One entry per acceptance criterion. Every criterion must be accounted for as pass (with evidence) or handed-off (with a follow_up_plan).',
+              items: {
+                type: 'object',
+                properties: {
+                  n: { type: 'number', description: 'Criterion number/index.' },
+                  criterion: { type: 'string', description: 'Optional text of the criterion being checked.' },
+                  result: { type: 'string', enum: ['pass', 'handed-off'] },
+                  evidence: { type: 'string', description: 'What demonstrates the result — file paths, commit SHAs, output, or the reason for hand-off.' },
+                  follow_up_plan: { type: 'string', description: 'The plan (id or reference) this criterion was carried into. Expected when result is "handed-off".' },
+                },
+                required: ['n', 'result', 'evidence'],
+              },
+            },
+            disclosures: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Optional free-text disclosures relevant to closing this plan.',
+            },
+          },
+          required: ['session_log', 'acceptance'],
+        },
       },
       required: ['plan_id', 'new_status'],
     },
