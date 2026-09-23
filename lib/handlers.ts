@@ -1825,8 +1825,17 @@ async function updatePlanStatus(supabase: SupabaseClient, args: Args): Promise<s
   if (args.new_status === 'queued') update.queued_at = new Date().toISOString();
   if (args.new_status === 'succeeded' || args.new_status === 'abandoned') update.completed_at = new Date().toISOString();
   if (args.executor_report) update.executor_report = args.executor_report;
+  // Pass the done receipt straight through, untouched. No client-side validation of
+  // its shape is performed here — a database trigger on plans (BB-2026-09-23-done-receipt)
+  // is the sole enforcer of the five completeness rules when new_status is 'succeeded'.
+  if (args.done_receipt !== undefined) update.done_receipt = args.done_receipt;
 
   const { data, error } = await supabase.from('plans').update(update).eq('id', args.plan_id).select().single();
+  // Surfaced unchanged: on a trigger RAISE EXCEPTION, PostgREST puts the exact
+  // exception text in error.message, and error.message is the entirety of what
+  // gets thrown here — no prefix, no rewrite, no generic fallback — so the
+  // rule-specific refusal reaches the caller verbatim, same as every other
+  // Supabase error in this file.
   if (error) throw new Error(error.message);
   return JSON.stringify(data, null, 2);
 }
