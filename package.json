@@ -4,7 +4,7 @@
   "description": "MCP server for Charles's project state — durable memory of decisions, assumptions, blockers, next moves, and plans across projects.",
   "private": true,
   "engines": {
-    "node": ">=20"
+    "node": "24.x"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"
