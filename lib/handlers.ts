@@ -1961,7 +1961,7 @@ async function updatePlanContent(supabase: SupabaseClient, args: Args): Promise<
   // Load current plan to get title, current revision number, and existing board labels
   const { data: plan, error: fetchErr } = await supabase
     .from('plans')
-    .select('id, title, content, current_revision, source, tags, plain_title, plain_summary, campaign_id, designed_in')
+    .select('id, project_id, title, content, current_revision, source, tags, plain_title, plain_summary, campaign_id, designed_in')
     .eq('id', args.plan_id)
     .maybeSingle();
   if (fetchErr) throw new Error(fetchErr.message);
