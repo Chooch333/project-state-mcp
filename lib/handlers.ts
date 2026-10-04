@@ -1702,9 +1702,14 @@ async function applyPlanReplacement(supabase: SupabaseClient, oldPlanId: string,
 }
 
 async function assertPlanExists(supabase: SupabaseClient, planId: string): Promise<void> {
-  const { data, error } = await supabase.from('plans').select('id').eq('id', planId).maybeSingle();
+  const { data, error } = await supabase.from('plans').select('id, status').eq('id', planId).maybeSingle();
   if (error) throw new Error(`DB error looking up replaced plan ${planId}: ${error.message}`);
   if (!data) throw new Error(`replaces: plan not found: ${planId}`);
+  // C-J-323 review (2026-10-04): a running or finished build stays as its own history;
+  // only unbuilt briefs (draft/queued/blocked/failed) can be replaced.
+  if (data.status === 'running' || data.status === 'succeeded') {
+    throw new Error(`replaces: plan ${planId} is ${data.status} and can't be replaced. Write the new brief without replaces.`);
+  }
 }
 
 async function boardUpdate(supabase: SupabaseClient, args: Args): Promise<string> {
