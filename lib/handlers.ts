@@ -1823,16 +1823,24 @@ async function listBoard(supabase: SupabaseClient, args: Args): Promise<string> 
 
   let planQ = supabase
     .from('plans')
-    .select('id, project_id, title, plain_title, plain_summary, status, tags, topic_id, chat_tag, chat_title, chat_url, campaign_id, designed_in, created_at')
+    .select('id, project_id, title, plain_title, plain_summary, status, tags, topic_id, chat_tag, chat_title, chat_url, campaign_id, designed_in, created_at, overnight')
     .eq('status', 'draft')
     .is('replaced_by', null)
     .order('created_at', { ascending: false });
   if (projectId) planQ = planQ.eq('project_id', projectId);
   const { data: drafts, error: dErr } = await planQ;
   if (dErr) throw new Error(dErr.message);
-  const briefs = (drafts ?? [])
-    .filter((p: any) => (typeof p.title === 'string' && p.title.startsWith('BB-')) || (p.tags ?? []).includes('build-brief'))
-    .map((p: any) => ({ ...p, project_slug: slugById.get(p.project_id) ?? null }));
+  const draftBriefs = (drafts ?? [])
+    .filter((p: any) => (typeof p.title === 'string' && p.title.startsWith('BB-')) || (p.tags ?? []).includes('build-brief'));
+  // Build 26: overnight is a tag, not a status. overnight_position comes from the
+  // overnight_line view, which only holds queued briefs, so drafts are usually null.
+  const positions = await overnightPositions(supabase, draftBriefs.map((p: any) => p.id));
+  const briefs = draftBriefs.map((p: any) => ({
+    ...p,
+    overnight: p.overnight === true,
+    overnight_position: positions.get(p.id) ?? null,
+    project_slug: slugById.get(p.project_id) ?? null,
+  }));
 
   return JSON.stringify({
     project_slug: args.project_slug ?? null,
