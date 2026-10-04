@@ -2056,7 +2056,28 @@ async function updatePlanContent(supabase: SupabaseClient, args: Args): Promise<
     response.label_warning =
       'warning: unnamed builds show as (needs a name) on the board — add your best-shot plain name now via update_plan_labels';
   }
+  await applyBoardLinksAfterPlanEdit(supabase, response, updated, topic, replacesId);
+  const boardReminder = await boardReminderFor(supabase, args.chat_tag);
+  if (boardReminder) response.board_reminder = boardReminder;
   return JSON.stringify(response, null, 2);
+}
+
+/**
+ * Shared tail for update_plan_content / update_plan_labels: reports the topic, briefs it
+ * if this edit set a topic on an already-queued plan, and retires the replaced plan.
+ */
+async function applyBoardLinksAfterPlanEdit(
+  supabase: SupabaseClient, response: any, updated: any, topic: any | null, replacesId: string | null
+): Promise<void> {
+  if (topic) {
+    response.topic = { id: topic.id, display_id: topic.display_id, name: topic.name, status: topic.status };
+    if (updated.status === 'queued') {
+      const briefErr = await markTopicBriefed(supabase, topic.id);
+      if (briefErr) response.topic_brief_error = briefErr;
+      else response.topic.status = 'briefed';
+    }
+  }
+  if (replacesId) response.replaced_plan = await applyPlanReplacement(supabase, replacesId, updated.id);
 }
 
 // ─────────────────────────────────────────────────────────
