@@ -140,6 +140,12 @@ export async function callTool(name: string, args: Args): Promise<string> {
       return addPunchNote(supabase, args);
     case 'set_punch_status':
       return setPunchStatus(supabase, args);
+    case 'board_update':
+      return boardUpdate(supabase, args);
+    case 'board_link_chat':
+      return boardLinkChat(supabase, args);
+    case 'list_board':
+      return listBoard(supabase, args);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
