@@ -2229,18 +2229,32 @@ async function updatePlanLabels(supabase: SupabaseClient, args: Args): Promise<s
     }
   }
 
-  if (Object.keys(update).length === 0) {
-    throw new Error('No label fields provided. Pass at least one of plain_title, plain_summary, campaign, designed_in.');
+  // Design-board links (Build 23) — same rules as write_plan.
+  const replacesId = nonEmpty(args.replaces);
+  if (replacesId === args.plan_id) throw new Error('replaces cannot point at the plan itself');
+  if (replacesId) await assertPlanExists(supabase, replacesId);
+  let topic: any = null;
+  if (nonEmpty(args.topic)) {
+    const { data: p, error: pErr } = await supabase.from('plans').select('project_id').eq('id', args.plan_id).maybeSingle();
+    if (pErr) throw new Error(pErr.message);
+    if (!p) throw new Error(`Plan not found: ${args.plan_id}`);
+    topic = await resolveOrCreateTopic(supabase, p.project_id, args.topic);
+    update.topic_id = topic.id;
+  }
+  if (nonEmpty(args.chat_tag)) update.chat_tag = nonEmpty(args.chat_tag);
+
+  if (Object.keys(update).length === 0 && !replacesId) {
+    throw new Error('No label fields provided. Pass at least one of plain_title, plain_summary, campaign, designed_in, topic, chat_tag, replaces.');
   }
 
-  const { data, error } = await supabase
-    .from('plans')
-    .update(update)
-    .eq('id', args.plan_id)
-    .select('id, title, status, plain_title, plain_summary, campaign_id, designed_in')
-    .single();
+  const selectFields = 'id, title, status, plain_title, plain_summary, campaign_id, designed_in, topic_id, chat_tag';
+  const { data, error } = Object.keys(update).length > 0
+    ? await supabase.from('plans').update(update).eq('id', args.plan_id).select(selectFields).single()
+    : await supabase.from('plans').select(selectFields).eq('id', args.plan_id).single();
   if (error) throw new Error(error.message);
-  return JSON.stringify(data, null, 2);
+  const response: any = { ...data };
+  await applyBoardLinksAfterPlanEdit(supabase, response, data, topic, replacesId);
+  return JSON.stringify(response, null, 2);
 }
 
 // ─────────────────────────────────────────────────────────
