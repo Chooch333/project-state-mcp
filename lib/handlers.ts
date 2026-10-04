@@ -2048,15 +2048,17 @@ async function updatePlanContent(supabase: SupabaseClient, args: Args): Promise<
   const topic = nonEmpty(args.topic) ? await resolveOrCreateTopic(supabase, plan.project_id, args.topic) : null;
   if (topic) updateRow.topic_id = topic.id;
   if (nonEmpty(args.chat_tag)) updateRow.chat_tag = nonEmpty(args.chat_tag);
+  // Build 26: overnight / after / target_repo — only the ones passed are changed.
+  Object.assign(updateRow, readOvernightFields(args));
 
   // Update the plan row
   const { data: updated, error: updateErr } = await supabase
     .from('plans')
     .update(updateRow)
     .eq('id', args.plan_id)
-    .select('id, title, status, current_revision, source, created_at, plain_title, plain_summary, campaign_id, designed_in, topic_id, chat_tag')
+    .select('id, title, status, current_revision, source, created_at, plain_title, plain_summary, campaign_id, designed_in, topic_id, chat_tag, overnight, after_plan_ids, target_repo')
     .single();
-  if (updateErr) throw new Error(updateErr.message);
+  if (updateErr) throw new Error(plainDbError(updateErr.message));
 
   // Insert the new revision snapshot. Non-fatal if this fails (plan is already updated).
   const { error: revErr } = await supabase.from('plan_revisions').insert({
