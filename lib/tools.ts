@@ -564,6 +564,7 @@ export const TOOLS = [
         tags: { type: 'array', items: { type: 'string' } },
         source: { type: 'string' },
         observed_at: { type: 'string', description: 'Optional ISO 8601 timestamp override — when the narrative describes (not when you wrote it). Defaults to now().' },
+        chat_tag: { type: 'string', description: 'Optional DA-MMDD-slug tag of the calling design chat. When passed, the reply carries a board_reminder (addressed to you, the calling chat — never to Charles) if this chat has not written a current design-board line via board_update in the last 45 minutes. Never fails the write.' },
       },
       required: ['project_slug', 'narrative', 'source'],
     },
