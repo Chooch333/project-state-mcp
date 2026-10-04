@@ -700,4 +700,45 @@ export const TOOLS = [
       required: ['item', 'new_status', 'author', 'note'],
     },
   },
+  {
+    name: 'board_update',
+    description: 'Write this design chat\'s current line on the design board (the shelf design board). Call this every turn or every couple of turns while designing — not just at the end — passing your chat_tag (the DA-MMDD-slug tag of this chat, e.g. DA-1004-shelf-board). Finds the topic by name (case-insensitive) within the project, or creates it. Your previous current line for that topic is marked replaced and the new line becomes current, so each chat has exactly one live line per topic. The line is AI inference: your own one-sentence read of where the design stands right now — not a quote and not a decision. Optional topic fields: today (what is being worked on today), decided (ONLY decisions Charles himself has made — never your own inferences or recommendations), open_question (the main thing still open), status (design | parked | briefed). Only the fields you pass are changed. Returns the topic, including its display_id (e.g. C-T-001), plus the new current line.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_slug: { type: 'string' },
+        topic: { type: 'string', description: 'Topic name. Matched case-insensitively within the project; created if it does not exist.' },
+        chat_tag: { type: 'string', description: 'This chat\'s DA-MMDD-slug tag. Identifies whose line this is.' },
+        line: { type: 'string', description: 'One-sentence AI-inferred read of where this topic stands in this chat right now.' },
+        today: { type: 'string', description: 'Optional: what is being worked on in this topic today.' },
+        decided: { type: 'string', description: 'Optional: ONLY what Charles himself has decided. Never your own inference or recommendation.' },
+        open_question: { type: 'string', description: 'Optional: the main open question on this topic.' },
+        status: { type: 'string', enum: ['design', 'parked', 'briefed'], description: 'Optional topic status.' },
+      },
+      required: ['project_slug', 'topic', 'chat_tag', 'line'],
+    },
+  },
+  {
+    name: 'board_link_chat',
+    description: 'Attach a chat\'s title and URL to everything on the design board written under its chat_tag: fills chat_title and chat_url on every design_topic_lines row and every plan carrying that chat_tag. Use once the chat\'s title/URL are known. Returns how many lines and plans were updated.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        chat_tag: { type: 'string', description: 'The DA-MMDD-slug tag to link.' },
+        chat_title: { type: 'string' },
+        chat_url: { type: 'string' },
+      },
+      required: ['chat_tag', 'chat_title', 'chat_url'],
+    },
+  },
+  {
+    name: 'list_board',
+    description: 'Read the design board: every design topic (optionally for one project) with its current lines (one live line per chat), plus the draft build briefs waiting on the shelf (plans in status draft whose title starts with "BB-" or that are tagged build-brief, and that have not been replaced by a newer plan). project_slug is optional — omit it to read the board across all projects; every row carries its project_slug.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_slug: { type: 'string', description: 'Optional — omit to read the board across all projects.' },
+      },
+    },
+  },
 ] as const;
