@@ -1231,6 +1231,8 @@ async function logDecision(supabase: SupabaseClient, args: Args): Promise<string
       'If you can articulate what you consulted (web search, MCP tool calls, uploaded files, prior decisions) or if the user knows, ' +
       'call update_provenance with decision_id ' + data.id + ' to fill it in.';
   }
+  const boardReminder = await boardReminderFor(supabase, args.chat_tag);
+  if (boardReminder) response.board_reminder = boardReminder;
   return JSON.stringify(response, null, 2);
 }
 
