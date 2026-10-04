@@ -2011,6 +2011,14 @@ async function updatePlanContent(supabase: SupabaseClient, args: Args): Promise<
     }
   }
 
+  // Design-board links (Build 23) — same rules as write_plan.
+  const replacesId = nonEmpty(args.replaces);
+  if (replacesId === args.plan_id) throw new Error('replaces cannot point at the plan itself');
+  if (replacesId) await assertPlanExists(supabase, replacesId);
+  const topic = nonEmpty(args.topic) ? await resolveOrCreateTopic(supabase, plan.project_id, args.topic) : null;
+  if (topic) updateRow.topic_id = topic.id;
+  if (nonEmpty(args.chat_tag)) updateRow.chat_tag = nonEmpty(args.chat_tag);
+
   // Update the plan row
   const { data: updated, error: updateErr } = await supabase
     .from('plans')
