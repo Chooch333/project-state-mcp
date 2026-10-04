@@ -1880,10 +1880,12 @@ async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> 
     campaign_id: campaignId,
     designed_in: designedIn,
   };
+  if (topic) insertRow.topic_id = topic.id;
+  if (chatTag) insertRow.chat_tag = chatTag;
   if (createdAt) insertRow.created_at = createdAt;
 
   const { data, error } = await supabase.from('plans').insert(insertRow)
-    .select('id, title, status, provenance, tags, source, current_revision, created_at, plain_title, plain_summary, campaign_id, designed_in').single();
+    .select('id, title, status, provenance, tags, source, current_revision, created_at, plain_title, plain_summary, campaign_id, designed_in, topic_id, chat_tag').single();
   if (error) throw new Error(error.message);
 
   // Seed revision 1 with the initial content. Change_reason is implicit ("initial write") on revision 1.
