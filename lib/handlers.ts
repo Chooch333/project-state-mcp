@@ -1860,6 +1860,13 @@ async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> 
 
   const createdAt = parseOverrideTimestamp(args.created_at, 'created_at');
 
+  // Design-board links (Build 23). replaces is validated up front so a typo fails the
+  // write before anything lands; the old plan is retired only after this one exists.
+  const replacesId = nonEmpty(args.replaces);
+  if (replacesId) await assertPlanExists(supabase, replacesId);
+  const topic = nonEmpty(args.topic) ? await resolveOrCreateTopic(supabase, projectId, args.topic) : null;
+  const chatTag = nonEmpty(args.chat_tag);
+
   const insertRow: any = {
     project_id: projectId,
     title: args.title,
