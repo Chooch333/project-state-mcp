@@ -154,6 +154,12 @@ export async function callTool(name: string, args: Args): Promise<string> {
       return boardLinkChat(supabase, args);
     case 'list_board':
       return listBoard(supabase, args);
+    case 'set_overnight':
+      return setOvernight(supabase, args);
+    case 'overnight_line':
+      return overnightLine(supabase, args);
+    case 'night_log':
+      return nightLog(supabase, args);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
