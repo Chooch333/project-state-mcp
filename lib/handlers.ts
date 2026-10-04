@@ -2024,7 +2024,7 @@ async function updatePlanContent(supabase: SupabaseClient, args: Args): Promise<
     .from('plans')
     .update(updateRow)
     .eq('id', args.plan_id)
-    .select('id, title, status, current_revision, source, created_at, plain_title, plain_summary, campaign_id, designed_in')
+    .select('id, title, status, current_revision, source, created_at, plain_title, plain_summary, campaign_id, designed_in, topic_id, chat_tag')
     .single();
   if (updateErr) throw new Error(updateErr.message);
 
