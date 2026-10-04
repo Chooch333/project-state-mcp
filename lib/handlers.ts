@@ -1916,6 +1916,16 @@ async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> 
     response.label_warning =
       'warning: unnamed builds show as (needs a name) on the board — add your best-shot plain name now via update_plan_labels';
   }
+  if (topic) response.topic = { id: topic.id, display_id: topic.display_id, name: topic.name };
+  if (replacesId) {
+    try {
+      response.replaced_plan = await applyPlanReplacement(supabase, replacesId, data.id);
+    } catch (e: any) {
+      throw new Error(`Plan ${data.id} was written, but ${e.message}. Retry via update_plan_labels with plan_id ${data.id} and replaces ${replacesId}.`);
+    }
+  }
+  const boardReminder = await boardReminderFor(supabase, args.chat_tag);
+  if (boardReminder) response.board_reminder = boardReminder;
   return JSON.stringify(response, null, 2);
 }
 
