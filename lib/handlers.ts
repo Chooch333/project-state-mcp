@@ -1574,6 +1574,247 @@ async function completeNextMove(supabase: SupabaseClient, args: Args): Promise<s
 }
 
 // ─────────────────────────────────────────────────────────
+// Design board (shelf design board) — Build 23, BB-2026-10-04-shelf-design-board.
+// design_topics: one row per topic per project (name unique case-insensitively).
+// design_topic_lines: each design chat's live one-line read per topic, keyed by
+// chat_tag; at most one current (replaced_at IS NULL) line per (topic, chat_tag).
+// ─────────────────────────────────────────────────────────
+
+const DESIGN_TOPIC_STATUS = ['design', 'parked', 'briefed'];
+const DESIGN_TOPIC_FIELDS = 'id, display_id, project_id, name, today, decided, open_question, status, created_at, updated_at';
+
+/** A chat's board line counts as stale once it is older than this many minutes. */
+export const BOARD_REMINDER_STALE_MINUTES = 45;
+
+/**
+ * Pure staleness check for the board reminder. Returns true when the chat's newest
+ * current board line is missing, unparseable, or older than thresholdMinutes.
+ */
+export function isBoardLineStale(
+  latestWrittenAt: string | Date | null | undefined,
+  now: Date = new Date(),
+  thresholdMinutes: number = BOARD_REMINDER_STALE_MINUTES
+): boolean {
+  if (latestWrittenAt === null || latestWrittenAt === undefined || latestWrittenAt === '') return true;
+  const t = latestWrittenAt instanceof Date ? latestWrittenAt.getTime() : new Date(latestWrittenAt).getTime();
+  if (isNaN(t)) return true;
+  return now.getTime() - t > thresholdMinutes * 60 * 1000;
+}
+
+function nonEmpty(v: unknown): string | null {
+  return (typeof v === 'string' && v.trim().length > 0) ? v.trim() : null;
+}
+
+/**
+ * Soft board reminder for write tools that accept chat_tag. Addressed to the calling
+ * chat, never to Charles. NEVER throws: any error just means no reminder.
+ */
+async function boardReminderFor(supabase: SupabaseClient, chatTagRaw: unknown): Promise<string | null> {
+  try {
+    const chatTag = nonEmpty(chatTagRaw);
+    if (!chatTag) return null;
+    const { data, error } = await supabase
+      .from('design_topic_lines')
+      .select('written_at')
+      .eq('chat_tag', chatTag)
+      .is('replaced_at', null)
+      .order('written_at', { ascending: false })
+      .limit(1);
+    if (error) return null;
+    const latest = data && data.length > 0 ? data[0].written_at : null;
+    if (!isBoardLineStale(latest)) return null;
+    return latest
+      ? `board reminder: your design-board line for ${chatTag} is more than ${BOARD_REMINDER_STALE_MINUTES} minutes old — call board_update now with your topic, chat_tag ${chatTag}, and a fresh one-line read of where the design stands`
+      : `board reminder: ${chatTag} has no current line on the design board — call board_update now with your topic, chat_tag ${chatTag}, and a one-line read of where the design stands`;
+  } catch {
+    return null;
+  }
+}
+
+/** Find a design topic by name (case-insensitive) in a project, or create it. */
+async function resolveOrCreateTopic(supabase: SupabaseClient, projectId: string, nameRaw: unknown): Promise<any> {
+  const name = nonEmpty(nameRaw);
+  if (!name) throw new Error('topic must be a non-empty string');
+  const find = async () => {
+    const { data, error } = await supabase
+      .from('design_topics')
+      .select(DESIGN_TOPIC_FIELDS)
+      .eq('project_id', projectId);
+    if (error) throw new Error(`DB error looking up design topic '${name}': ${error.message}`);
+    return (data ?? []).find((t: any) => String(t.name).toLowerCase() === name.toLowerCase()) ?? null;
+  };
+  const existing = await find();
+  if (existing) return existing;
+  const { data, error } = await supabase
+    .from('design_topics')
+    .insert({ project_id: projectId, name })
+    .select(DESIGN_TOPIC_FIELDS)
+    .single();
+  if (error) {
+    // Lost a race against a concurrent create of the same name — use the winner.
+    if ((error as any).code === '23505') {
+      const again = await find();
+      if (again) return again;
+    }
+    throw new Error(`DB error creating design topic '${name}': ${error.message}`);
+  }
+  return data;
+}
+
+/** Set a design topic's board status to briefed. Non-fatal: returns an error string or null. */
+async function markTopicBriefed(supabase: SupabaseClient, topicId: string): Promise<string | null> {
+  const { error } = await supabase
+    .from('design_topics')
+    .update({ status: 'briefed', updated_at: new Date().toISOString() })
+    .eq('id', topicId);
+  return error ? error.message : null;
+}
+
+/**
+ * Mark oldPlanId as replaced by newPlanId: replaced_by + status abandoned. abandoned is
+ * not gated by the done-receipt trigger (it only checks 'succeeded'), so no receipt needed.
+ */
+async function applyPlanReplacement(supabase: SupabaseClient, oldPlanId: string, newPlanId: string): Promise<any> {
+  if (oldPlanId === newPlanId) throw new Error('replaces cannot point at the plan itself');
+  const { data, error } = await supabase
+    .from('plans')
+    .update({ replaced_by: newPlanId, status: 'abandoned', completed_at: new Date().toISOString() })
+    .eq('id', oldPlanId)
+    .select('id, title, status, replaced_by')
+    .maybeSingle();
+  if (error) throw new Error(`Failed to mark plan ${oldPlanId} as replaced by ${newPlanId}: ${error.message}`);
+  if (!data) throw new Error(`replaces: plan not found: ${oldPlanId}`);
+  return data;
+}
+
+async function assertPlanExists(supabase: SupabaseClient, planId: string): Promise<void> {
+  const { data, error } = await supabase.from('plans').select('id').eq('id', planId).maybeSingle();
+  if (error) throw new Error(`DB error looking up replaced plan ${planId}: ${error.message}`);
+  if (!data) throw new Error(`replaces: plan not found: ${planId}`);
+}
+
+async function boardUpdate(supabase: SupabaseClient, args: Args): Promise<string> {
+  const chatTag = nonEmpty(args.chat_tag);
+  const line = nonEmpty(args.line);
+  if (!chatTag) throw new Error('chat_tag is required (this chat\'s DA-MMDD-slug tag)');
+  if (!line) throw new Error('line is required and must be non-empty');
+  if (args.status !== undefined && !DESIGN_TOPIC_STATUS.includes(args.status)) {
+    throw new Error(`status must be one of ${DESIGN_TOPIC_STATUS.join(', ')} (got "${args.status}")`);
+  }
+  const projectId = await resolveProjectId(supabase, args.project_slug);
+  const topic = await resolveOrCreateTopic(supabase, projectId, args.topic);
+
+  const now = new Date().toISOString();
+  const { data: replaced, error: repErr } = await supabase
+    .from('design_topic_lines')
+    .update({ replaced_at: now })
+    .eq('topic_id', topic.id)
+    .eq('chat_tag', chatTag)
+    .is('replaced_at', null)
+    .select('id');
+  if (repErr) throw new Error(`Failed to retire previous line: ${repErr.message}`);
+
+  const { data: newLine, error: lineErr } = await supabase
+    .from('design_topic_lines')
+    .insert({ topic_id: topic.id, chat_tag: chatTag, line })
+    .select('id, chat_tag, chat_title, chat_url, line, written_at')
+    .single();
+  if (lineErr) throw new Error(`Failed to write board line: ${lineErr.message}`);
+
+  const topicUpdate: any = { updated_at: now };
+  for (const f of ['today', 'decided', 'open_question']) {
+    if (args[f] !== undefined) topicUpdate[f] = nonEmpty(args[f]);
+  }
+  if (args.status !== undefined) topicUpdate.status = args.status;
+  const { data: updatedTopic, error: topicErr } = await supabase
+    .from('design_topics')
+    .update(topicUpdate)
+    .eq('id', topic.id)
+    .select(DESIGN_TOPIC_FIELDS)
+    .single();
+  if (topicErr) throw new Error(`Line written, but failed to update topic fields: ${topicErr.message}`);
+
+  return JSON.stringify({
+    topic: { ...updatedTopic, project_slug: args.project_slug },
+    current_line: newLine,
+    replaced_lines: replaced?.length ?? 0,
+  }, null, 2);
+}
+
+async function boardLinkChat(supabase: SupabaseClient, args: Args): Promise<string> {
+  const chatTag = nonEmpty(args.chat_tag);
+  if (!chatTag) throw new Error('chat_tag is required');
+  const update: any = {};
+  if (args.chat_title !== undefined) update.chat_title = nonEmpty(args.chat_title);
+  if (args.chat_url !== undefined) update.chat_url = nonEmpty(args.chat_url);
+  if (Object.keys(update).length === 0) throw new Error('Pass chat_title and/or chat_url.');
+
+  const { data: lines, error: lErr } = await supabase
+    .from('design_topic_lines').update(update).eq('chat_tag', chatTag).select('id');
+  if (lErr) throw new Error(`Failed to link design_topic_lines: ${lErr.message}`);
+  const { data: plans, error: pErr } = await supabase
+    .from('plans').update(update).eq('chat_tag', chatTag).select('id');
+  if (pErr) throw new Error(`Linked ${lines?.length ?? 0} lines, but failed to link plans: ${pErr.message}`);
+
+  return JSON.stringify({
+    chat_tag: chatTag,
+    ...update,
+    lines_updated: lines?.length ?? 0,
+    plans_updated: plans?.length ?? 0,
+  }, null, 2);
+}
+
+async function listBoard(supabase: SupabaseClient, args: Args): Promise<string> {
+  const { data: projects, error: projErr } = await supabase.from('projects').select('id, slug');
+  if (projErr) throw new Error(projErr.message);
+  const slugById = new Map<string, string>((projects ?? []).map((p: any) => [p.id, p.slug]));
+  const projectId = args.project_slug ? await resolveProjectId(supabase, args.project_slug) : null;
+
+  let topicQ = supabase.from('design_topics').select(DESIGN_TOPIC_FIELDS).order('updated_at', { ascending: false });
+  if (projectId) topicQ = topicQ.eq('project_id', projectId);
+  const { data: topics, error: tErr } = await topicQ;
+  if (tErr) throw new Error(tErr.message);
+
+  const topicIds = (topics ?? []).map((t: any) => t.id);
+  let lines: any[] = [];
+  if (topicIds.length > 0) {
+    const { data, error } = await supabase
+      .from('design_topic_lines')
+      .select('id, topic_id, chat_tag, chat_title, chat_url, line, written_at')
+      .in('topic_id', topicIds)
+      .is('replaced_at', null)
+      .order('written_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    lines = data ?? [];
+  }
+
+  let planQ = supabase
+    .from('plans')
+    .select('id, project_id, title, plain_title, plain_summary, status, tags, topic_id, chat_tag, chat_title, chat_url, campaign_id, designed_in, created_at')
+    .eq('status', 'draft')
+    .is('replaced_by', null)
+    .order('created_at', { ascending: false });
+  if (projectId) planQ = planQ.eq('project_id', projectId);
+  const { data: drafts, error: dErr } = await planQ;
+  if (dErr) throw new Error(dErr.message);
+  const briefs = (drafts ?? [])
+    .filter((p: any) => (typeof p.title === 'string' && p.title.startsWith('BB-')) || (p.tags ?? []).includes('build-brief'))
+    .map((p: any) => ({ ...p, project_slug: slugById.get(p.project_id) ?? null }));
+
+  return JSON.stringify({
+    project_slug: args.project_slug ?? null,
+    topic_count: topics?.length ?? 0,
+    topics: (topics ?? []).map((t: any) => ({
+      ...t,
+      project_slug: slugById.get(t.project_id) ?? null,
+      current_lines: lines.filter((l) => l.topic_id === t.id),
+    })),
+    draft_brief_count: briefs.length,
+    draft_briefs: briefs,
+  }, null, 2);
+}
+
+// ─────────────────────────────────────────────────────────
 // Plans
 // ─────────────────────────────────────────────────────────
 
