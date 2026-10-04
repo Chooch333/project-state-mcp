@@ -1910,10 +1910,13 @@ async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> 
   if (topic) insertRow.topic_id = topic.id;
   if (chatTag) insertRow.chat_tag = chatTag;
   if (createdAt) insertRow.created_at = createdAt;
+  // Build 26: overnight tag, after links (after_plan_ids), target_repo. A trigger on plans
+  // refuses bad after links in plain words; that message is passed through as-is.
+  Object.assign(insertRow, readOvernightFields(args));
 
   const { data, error } = await supabase.from('plans').insert(insertRow)
-    .select('id, title, status, provenance, tags, source, current_revision, created_at, plain_title, plain_summary, campaign_id, designed_in, topic_id, chat_tag').single();
-  if (error) throw new Error(error.message);
+    .select('id, title, status, provenance, tags, source, current_revision, created_at, plain_title, plain_summary, campaign_id, designed_in, topic_id, chat_tag, overnight, after_plan_ids, target_repo').single();
+  if (error) throw new Error(plainDbError(error.message));
 
   // Seed revision 1 with the initial content. Change_reason is implicit ("initial write") on revision 1.
   // Backdate the revision to match the plan if an override was given, so history stays consistent.
