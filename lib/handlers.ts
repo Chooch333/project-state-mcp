@@ -2140,6 +2140,15 @@ async function updatePlanStatus(supabase: SupabaseClient, args: Args): Promise<s
   // rule-specific refusal reaches the caller verbatim, same as every other
   // Supabase error in this file.
   if (error) throw new Error(error.message);
+  // Build 23: queuing a plan that carries a design-board topic briefs that topic.
+  // Non-fatal — the status change has already been applied.
+  if (args.new_status === 'queued' && data?.topic_id) {
+    const briefErr = await markTopicBriefed(supabase, data.topic_id);
+    const { embedding, ...rest } = data;
+    return JSON.stringify(briefErr
+      ? { ...rest, topic_brief_error: briefErr }
+      : { ...rest, topic_status: 'briefed' }, null, 2);
+  }
   return JSON.stringify(data, null, 2);
 }
 
