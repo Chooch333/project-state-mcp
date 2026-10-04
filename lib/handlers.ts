@@ -2274,16 +2274,18 @@ async function updatePlanLabels(supabase: SupabaseClient, args: Args): Promise<s
     update.topic_id = topic.id;
   }
   if (nonEmpty(args.chat_tag)) update.chat_tag = nonEmpty(args.chat_tag);
+  // Build 26: overnight / after / target_repo — only the ones passed are changed.
+  Object.assign(update, readOvernightFields(args));
 
   if (Object.keys(update).length === 0 && !replacesId) {
-    throw new Error('No label fields provided. Pass at least one of plain_title, plain_summary, campaign, designed_in, topic, chat_tag, replaces.');
+    throw new Error('No label fields provided. Pass at least one of plain_title, plain_summary, campaign, designed_in, topic, chat_tag, replaces, overnight, after, target_repo.');
   }
 
-  const selectFields = 'id, title, status, plain_title, plain_summary, campaign_id, designed_in, topic_id, chat_tag';
+  const selectFields = 'id, title, status, plain_title, plain_summary, campaign_id, designed_in, topic_id, chat_tag, overnight, after_plan_ids, target_repo';
   const { data, error } = Object.keys(update).length > 0
     ? await supabase.from('plans').update(update).eq('id', args.plan_id).select(selectFields).single()
     : await supabase.from('plans').select(selectFields).eq('id', args.plan_id).single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(plainDbError(error.message));
   const response: any = { ...data };
   await applyBoardLinksAfterPlanEdit(supabase, response, data, topic, replacesId);
   return JSON.stringify(response, null, 2);
