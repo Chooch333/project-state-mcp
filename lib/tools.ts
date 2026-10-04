@@ -742,12 +742,47 @@ export const TOOLS = [
   },
   {
     name: 'list_board',
-    description: 'Read the design board: every design topic (optionally for one project) with its current lines (one live line per chat), plus the draft build briefs waiting on the shelf (plans in status draft whose title starts with "BB-" or that are tagged build-brief, and that have not been replaced by a newer plan). project_slug is optional — omit it to read the board across all projects; every row carries its project_slug.',
+    description: 'Read the design board: every design topic (optionally for one project) with its current lines (one live line per chat), plus the draft build briefs waiting on the shelf (plans in status draft whose title starts with "BB-" or that are tagged build-brief, and that have not been replaced by a newer plan). project_slug is optional — omit it to read the board across all projects; every row carries its project_slug. Each draft brief also carries overnight (the overnight tag — a tag, not a status) and overnight_position (its place in the overnight line, or null; the line only holds queued briefs, so drafts are usually null).',
     inputSchema: {
       type: 'object',
       properties: {
         project_slug: { type: 'string', description: 'Optional — omit to read the board across all projects.' },
       },
+    },
+  },
+  {
+    name: 'set_overnight',
+    description: 'Turn the overnight tag on or off for one plan (Build 26). Overnight is a TAG, not a status: it marks a build brief as one the night runner may build once it is queued — the plan keeps its normal status. Returns the plan id, plain_title, status, overnight, after, target_repo, and — when overnight is true — its row in the overnight line (position, ready, waiting_on), or null with a note if it is not queued yet.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        overnight: { type: 'boolean', description: 'true to tag the plan overnight, false to remove the tag.' },
+      },
+      required: ['plan_id', 'overnight'],
+    },
+  },
+  {
+    name: 'overnight_line',
+    description: 'Read the overnight line (Build 26): every queued build brief tagged overnight, in the order the night runner will take them. Each row has plan_id, plain_title, target_repo, queued_at, position, ready, and waiting_on (plain names of what it is still waiting for — plans in its after list that have not landed, or another build running in the same repo). A plan with after links builds only after those plans have landed (succeeded and not deploy-red). Also returns last_night: every night_log entry for the most recent night, with each plan\'s plain_title, oldest first.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'night_log',
+    description: 'Record what happened to one plan during an overnight run (Build 26). Writes one night_runs row. The night is worked out in Indianapolis time from started_at (or now if omitted): the local date, except that anything before 12:00 noon counts as the previous night. result is one of built, skipped, stuck, deploy-red, interrupted — a deploy-red result means the plan has NOT landed, so briefs that come after it keep waiting. line is one plain sentence, 120 characters or fewer. Returns the inserted row.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        result: { type: 'string', enum: ['built', 'skipped', 'stuck', 'deploy-red', 'interrupted'] },
+        line: { type: 'string', description: 'One plain sentence about what happened, 120 characters or fewer.' },
+        started_at: { type: 'string', description: 'Optional ISO 8601 time the run started. Also decides which night the row belongs to.' },
+        ended_at: { type: 'string', description: 'Optional ISO 8601 time the run ended.' },
+      },
+      required: ['plan_id', 'result', 'line'],
     },
   },
 ] as const;
