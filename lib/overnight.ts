@@ -226,7 +226,7 @@ export async function nightLog(supabase: SupabaseClient, args: Args): Promise<st
   const endedAt = parseOptionalTimestamp(args.ended_at, 'ended_at');
   const night = nightFor(startedAt ? new Date(startedAt) : new Date());
 
-  const row: any = { night, plan_id: planId, result: args.result, line };
+  const row: any = { night, plan_id: isStart ? null : planId, result: args.result, line };
   if (startedAt) row.started_at = startedAt;
   if (endedAt) row.ended_at = endedAt;
 
