@@ -772,17 +772,17 @@ export const TOOLS = [
   },
   {
     name: 'night_log',
-    description: 'Record what happened to one plan during an overnight run (Build 26). Writes one night_runs row. The night is worked out in Indianapolis time from started_at (or now if omitted): the local date, except that anything before 12:00 noon counts as the previous night. result is one of built, skipped, stuck, deploy-red, interrupted — a deploy-red result means the plan has NOT landed, so briefs that come after it keep waiting. line is one plain sentence, 120 characters or fewer. Returns the inserted row.',
+    description: 'Record what happened to one plan during an overnight run (Build 26). Writes one night_runs row. The night is worked out in Indianapolis time from started_at (or now if omitted): the local date, except that anything before 12:00 noon counts as the previous night. result is one of built, skipped, stuck, deploy-red, interrupted — a deploy-red result means the plan has NOT landed, so briefs that come after it keep waiting. result night-start (Build 27.1) is the runner\'s every-night "I started" marker: plan_id is left out, and line says how many briefs were on the line — written even when none are queued, so a quiet night still shows life. line is one plain sentence, 120 characters or fewer. Returns the inserted row.',
     inputSchema: {
       type: 'object',
       properties: {
-        plan_id: { type: 'string' },
-        result: { type: 'string', enum: ['built', 'skipped', 'stuck', 'deploy-red', 'interrupted'] },
+        plan_id: { type: 'string', description: 'The plan this row is about. Required for every result except night-start, which has no plan.' },
+        result: { type: 'string', enum: ['built', 'skipped', 'stuck', 'deploy-red', 'interrupted', 'night-start'] },
         line: { type: 'string', description: 'One plain sentence about what happened, 120 characters or fewer.' },
         started_at: { type: 'string', description: 'Optional ISO 8601 time the run started. Also decides which night the row belongs to.' },
         ended_at: { type: 'string', description: 'Optional ISO 8601 time the run ended.' },
       },
-      required: ['plan_id', 'result', 'line'],
+      required: ['result', 'line'],
     },
   },
 ] as const;
