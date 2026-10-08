@@ -185,7 +185,7 @@ export async function overnightLine(supabase: SupabaseClient, _args: Args): Prom
       .order('created_at', { ascending: true });
     if (rErr) throw new Error(plainDbError(rErr.message));
     runs = data ?? [];
-    const ids = Array.from(new Set(runs.map((r) => r.plan_id)));
+    const ids = Array.from(new Set(runs.map((r) => r.plan_id).filter((id): id is string => typeof id === 'string')));
     const titles = new Map<string, string | null>();
     if (ids.length > 0) {
       const { data: plans, error: pErr } = await supabase
@@ -195,7 +195,7 @@ export async function overnightLine(supabase: SupabaseClient, _args: Args): Prom
       if (pErr) throw new Error(plainDbError(pErr.message));
       for (const p of (plans ?? []) as any[]) titles.set(p.id, p.plain_title ?? p.title ?? null);
     }
-    runs = runs.map((r) => ({ ...r, plain_title: titles.get(r.plan_id) ?? null }));
+    runs = runs.map((r) => ({ ...r, plain_title: r.plan_id ? titles.get(r.plan_id) ?? null : null }));
   }
 
   return JSON.stringify({
