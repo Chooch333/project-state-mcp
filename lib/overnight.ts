@@ -15,7 +15,9 @@ import { SupabaseClient } from '@supabase/supabase-js';
 
 type Args = Record<string, any>;
 
-export const NIGHT_RESULTS = ['built', 'skipped', 'stuck', 'deploy-red', 'interrupted'];
+export const NIGHT_RESULTS = ['built', 'skipped', 'stuck', 'deploy-red', 'interrupted', 'night-start'];
+/** Build 27.1: the runner's every-night start marker — the only result written without a plan_id. */
+export const NIGHT_START = 'night-start';
 export const NIGHT_LINE_MAX = 120;
 export const NIGHT_TIME_ZONE = 'America/Indiana/Indianapolis';
 
