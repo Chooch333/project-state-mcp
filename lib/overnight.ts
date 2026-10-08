@@ -206,11 +206,16 @@ export async function overnightLine(supabase: SupabaseClient, _args: Args): Prom
 }
 
 export async function nightLog(supabase: SupabaseClient, args: Args): Promise<string> {
-  const planId = typeof args.plan_id === 'string' ? args.plan_id.trim() : '';
-  if (!planId) throw new Error('plan_id is required.');
-  if (!UUID_RE.test(planId)) throw new Error('plan_id "' + planId + '" is not a plan id.');
   if (typeof args.result !== 'string' || !NIGHT_RESULTS.includes(args.result)) {
     throw new Error('result must be one of: ' + NIGHT_RESULTS.join(', ') + ' (got "' + String(args.result) + '").');
+  }
+  const isStart = args.result === NIGHT_START;
+  const planId = typeof args.plan_id === 'string' ? args.plan_id.trim() : '';
+  if (isStart) {
+    if (planId) throw new Error('night-start is the runner\'s own start marker — leave plan_id out.');
+  } else {
+    if (!planId) throw new Error('plan_id is required (only a night-start marker goes without one).');
+    if (!UUID_RE.test(planId)) throw new Error('plan_id "' + planId + '" is not a plan id.');
   }
   const line = typeof args.line === 'string' ? args.line.trim() : '';
   if (!line) throw new Error('line is required: one plain sentence about what happened.');
