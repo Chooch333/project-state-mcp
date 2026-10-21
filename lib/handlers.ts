@@ -2514,6 +2514,7 @@ async function describeCapabilities(supabase: SupabaseClient, _args: Args): Prom
     update_fill_gaps: 'update_change_reason fills in a missing reason on a supersession. update_provenance fills in missing provenance on a decision or plan. add_tags appends tags.',
     history_walkers: 'get_decision_chain walks supersession history for a decision. get_plan_revisions walks a plan\'s edit history. Both show how thinking evolved.',
     project_registration: 'create_project to register a new project. list_projects to see what exists.',
+    next_steps_list: 'checkin (every turn of a with-Charles chat that can be left mid-way; unchanged line = nothing written), close_thread (when the chat\'s stated finish happens), list_open_threads (oldest first). Feeds the Next steps list on cbrain\'s Dev tab. Plain words only — ids like TH-004 are refused. Rule: agent-library references/thread-checkin.md.',
   };
 
   const usage_tips = [
