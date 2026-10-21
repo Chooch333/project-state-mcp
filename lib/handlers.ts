@@ -161,6 +161,12 @@ export async function callTool(name: string, args: Args): Promise<string> {
       return overnightLine(supabase, args);
     case 'night_log':
       return nightLog(supabase, args);
+    case 'checkin':
+      return checkin(supabase, args);
+    case 'close_thread':
+      return closeThread(supabase, args);
+    case 'list_open_threads':
+      return listOpenThreads(supabase, args);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
