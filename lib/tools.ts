@@ -785,4 +785,47 @@ export const TOOLS = [
       required: ['result', 'line'],
     },
   },
+  {
+    name: 'checkin',
+    description: 'Report where this chat thread stands, for the Next steps list on cbrain\'s Dev tab (Build 44). Call at the end of every turn of a with-Charles chat that can be left mid-way (rule: Chooch333/agent-library references/thread-checkin.md). Upserts one row per thread_key. If next_step and waiting_on are the same as last time, nothing changes — the list keeps the old line and its date (never write "still waiting" or "no change"). Otherwise the line moves, moved_at is bumped and a history row is kept. A done or dropped thread is never reopened unless reopen: true. next_step and plain_name must be plain words: anything with ids or codes like TH-004 or BB-2026-… is refused with "Write this without ids like TH-004 — say what it is."',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        thread_key: { type: 'string', description: 'This chat\'s tag if it has one (DA-MMDD-slug), else "<kind>:<slug>", e.g. "tech-review:prism-room". Same key every turn.' },
+        kind: { type: 'string', enum: ['design-assist', 'build-chat', 'tech-discovery', 'tech-review', 'speed-run', 'block-chat', 'game-maker', 'plan-review', 'folder-chat', 'job'] },
+        project_label: { type: 'string', description: 'The personal project in plain words, e.g. "Family arcade", "Arch renders", "Kids ed app", "cbrain".' },
+        plain_name: { type: 'string', description: 'What this thread is, 3-6 plain words.' },
+        next_step: { type: 'string', description: 'One or two sentences Charles can act on cold: what is next and, if he owes something, exactly what. No ids, tags, build codes or file names.' },
+        waiting_on: { type: 'string', enum: ['you', 'claude', 'a-build', 'nobody'], description: '"you" means Charles.' },
+        links: { type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, url: { type: 'string' } }, required: ['label', 'url'] }, description: 'Optional: artifacts or pages worth opening.' },
+        chat_url: { type: 'string', description: 'Optional: this chat\'s URL.' },
+        source: { type: 'string', enum: ['chat', 'sweep'], description: 'Optional, default chat. The Next steps sweep passes sweep.' },
+        reopen: { type: 'boolean', description: 'Optional: true to reopen a done/dropped thread.' },
+      },
+      required: ['thread_key', 'kind', 'project_label', 'plain_name', 'next_step', 'waiting_on'],
+    },
+  },
+  {
+    name: 'close_thread',
+    description: 'Close a thread on the Next steps list (Build 44). Call when your skill\'s stated finish happens (e.g. report filed, brief on the shelf). Sets status done (or dropped with status: "dropped") and records closed_how in plain words.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        thread_key: { type: 'string' },
+        closed_how: { type: 'string', description: 'How it finished, in words, e.g. "report filed", "brief on the shelf", "Charles: done".' },
+        status: { type: 'string', enum: ['done', 'dropped'], description: 'Optional, default done.' },
+      },
+      required: ['thread_key', 'closed_how'],
+    },
+  },
+  {
+    name: 'list_open_threads',
+    description: 'Read the Next steps list (Build 44): every open chat thread across all Claude projects, oldest opened first, with project_label, plain_name, kind, next_step, waiting_on, links, chat_url, opened_at and moved_at. include_closed: true also returns done and dropped threads.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        include_closed: { type: 'boolean' },
+      },
+    },
+  },
 ] as const;
