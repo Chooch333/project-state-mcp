@@ -14,6 +14,7 @@ import {
   overnightLine,
   nightLog,
 } from './overnight';
+import { checkin, closeThread, listOpenThreads } from './threads';
 
 type Args = Record<string, any>;
 
