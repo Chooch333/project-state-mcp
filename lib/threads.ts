@@ -12,7 +12,8 @@
 //   - moved_at only moves, and a history row is only written, when next_step or
 //     waiting_on actually changes. A context rewrite never moves the card.
 // This module adds: no write at all when nothing changed, chats merged by url
-// (never dropped), and no reopening a done/dropped thread unless reopen: true.
+// (never dropped), and reopening: a chat check-in on a done/dropped card opens it
+// again (Charles picked the chat back up); a job check-in never does.
 //
 // project and campaign are Charles's fields, set only on cbrain's Dev tab.
 // No tool here writes them. checkin still accepts project_label so older chats
