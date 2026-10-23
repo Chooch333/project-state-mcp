@@ -802,10 +802,10 @@ export const TOOLS = [
         waiting_on: { type: 'string', enum: ['you', 'claude', 'a-build', 'nobody'], description: '"you" means Charles.' },
         links: { type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, url: { type: 'string' } }, required: ['label', 'url'] }, description: 'Optional: artifacts or pages worth opening.' },
         chat_url: { type: 'string', description: 'Optional: this chat\'s URL.' },
-        source: { type: 'string', enum: ['chat', 'sweep'], description: 'Optional, default chat. The Next steps sweep passes sweep.' },
+        source: { type: 'string', enum: ['chat', 'job', 'sweep'], description: 'Optional, default chat. Jobs (night runner, builds, repairers) pass job. sweep is retired.' },
         reopen: { type: 'boolean', description: 'Optional: true to reopen a done/dropped thread.' },
       },
-      required: ['thread_key', 'kind', 'project_label', 'plain_name', 'next_step', 'waiting_on'],
+      required: ['thread_key', 'kind', 'plain_name', 'next_step', 'waiting_on'],
     },
   },
   {
