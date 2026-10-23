@@ -218,11 +218,16 @@ export async function checkin(supabase: SupabaseClient, args: Args): Promise<str
     return JSON.stringify({ result: 'opened', thread: data }, null, 2);
   }
 
-  if (existing.status !== 'open' && !reopen) {
+  // Auto-reopen (Charles 2026-10-23): a chat only checks in when Charles sends
+  // it a message, so a chat check-in on a closed card means he picked that chat
+  // back up — open it again, no remembering needed. Jobs (night runner, builds,
+  // repairers) run without him and never reopen anything.
+  const autoReopen = source === 'chat';
+  if (existing.status !== 'open' && !reopen && !autoReopen) {
     return JSON.stringify(
       {
         result: 'closed-left-alone',
-        note: `This thread was closed (${existing.status}${existing.closed_how ? ': ' + existing.closed_how : ''}). Nothing was changed. Pass reopen: true to open it again.`,
+        note: `This thread was closed (${existing.status}${existing.closed_how ? ': ' + existing.closed_how : ''}). Nothing was changed: jobs never reopen a card.`,
         thread: existing,
       },
       null,
