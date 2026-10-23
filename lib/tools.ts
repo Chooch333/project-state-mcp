@@ -787,7 +787,7 @@ export const TOOLS = [
   },
   {
     name: 'checkin',
-    description: 'Report where this chat thread stands, for the Next steps list on cbrain\'s Dev tab (Build 44). Call at the end of every turn of a with-Charles chat that can be left mid-way (rule: Chooch333/agent-library references/thread-checkin.md). Upserts one row per thread_key. If next_step and waiting_on are the same as last time, nothing changes — the list keeps the old line and its date (never write "still waiting" or "no change"). Otherwise the line moves, moved_at is bumped and a history row is kept. A done or dropped thread is never reopened unless reopen: true. next_step and plain_name must be plain words: anything with ids or codes like TH-004 or BB-2026-… is refused with "Write this without ids like TH-004 — say what it is."',
+    description: 'Report where this chat thread stands, for the Next steps list on cbrain\'s Dev tab (Build 44). Call at the end of every turn of a with-Charles chat that can be left mid-way (rule: Chooch333/agent-library references/thread-checkin.md). Upserts one row per thread_key. If next_step and waiting_on are the same as last time, nothing changes — the list keeps the old line and its date (never write "still waiting" or "no change"). Otherwise the line moves, moved_at is bumped and a history row is kept. A done or dropped thread is reopened automatically when a chat checks in on it (source chat, the default: Charles picked that chat back up); a job check-in (source job) never reopens one. next_step and plain_name must be plain words: anything with ids or codes like TH-004 or BB-2026-… is refused with "Write this without ids like TH-004 — say what it is."',
     inputSchema: {
       type: 'object',
       properties: {
