@@ -823,7 +823,7 @@ export const TOOLS = [
   },
   {
     name: 'list_open_threads',
-    description: 'Read the Next steps list (Build 44): every open chat thread across all Claude projects, oldest opened first, with project_label, plain_name, kind, next_step, waiting_on, links, chat_url, opened_at and moved_at. include_closed: true also returns done and dropped threads.',
+    description: 'Read the Next steps list (Build 44): every open card across all Claude projects, oldest opened first, with plain_name (the build, the card\'s title), project and campaign (set only by Charles on the Dev tab; no tool writes them), kind, next_step, waiting_on, links, chat_url, chats, context (checked status), checked_at, opened_at and moved_at. include_closed: true also returns done and dropped threads.',
     inputSchema: {
       type: 'object',
       properties: {
