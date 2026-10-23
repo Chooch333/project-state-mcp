@@ -223,7 +223,9 @@ export async function checkin(supabase: SupabaseClient, args: Args): Promise<str
   // it a message, so a chat check-in on a closed card means he picked that chat
   // back up — open it again, no remembering needed. Jobs (night runner, builds,
   // repairers) run without him and never reopen anything.
-  const autoReopen = source === 'chat';
+  // Belt and braces: a card of kind "job" is never auto-reopened, even if a
+  // job forgot to send source "job".
+  const autoReopen = source === 'chat' && kind !== 'job' && existing.kind !== 'job';
   if (existing.status !== 'open' && !reopen && !autoReopen) {
     return JSON.stringify(
       {
