@@ -42,7 +42,7 @@ export const VERDICTS = ['open', 'looks-done', 'stale-reason'] as const;
 const SOURCES = ['chat', 'sweep', 'job'] as const;
 
 const THREAD_COLUMNS =
-  'id, thread_key, kind, plain_name, project, campaign, next_step, waiting_on, links, chat_url, chats, context, checked_at, opened_at, moved_at, status, closed_how, closed_at, source, updated_at';
+  'id, thread_key, kind, plain_name, project, campaign, next_step, waiting_on, links, chat_url, chats, context, checked_at, opened_at, moved_at, status, closed_how, closed_at, reopened_at, source, updated_at';
 
 function reqText(args: Args, field: string): string {
   const v = args[field];
