@@ -2506,11 +2506,10 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       const needsYouRows = questions.map(q => notesBoardRow('question', q))
         .concat(needsCharles.map(d => notesBoardRow('disclosure', d)));
 
-      // Waiting for a design check — disclosures flagged needs-design-check,
-      // plus succeeded plans nobody has checked yet (unchanged logic).
-      const designCheckPlans = allPlansFlat.filter(p => p.status === 'succeeded' && !p.reviewed_at);
-      const designCheckRows = needsDesignCheck.map(d => notesBoardRow('disclosure', d))
-        .concat(designCheckPlans.map(p => notesBoardRow('plan', p)));
+      // Waiting for a design check — disclosures flagged needs-design-check
+      // only. Finished builds no longer queue here: the review gate was
+      // removed 2026-10-23 (Charles), so succeeded means done.
+      const designCheckRows = needsDesignCheck.map(d => notesBoardRow('disclosure', d));
 
       // FYI — everything else that was noted.
       const fyiRows = fyiDisclosures.map(d => notesBoardRow('disclosure', d));
