@@ -260,6 +260,7 @@ export async function checkin(supabase: SupabaseClient, args: Args): Promise<str
     patch.status = 'open';
     patch.closed_how = null;
     patch.closed_at = null;
+    patch.reopened_at = new Date().toISOString();
   }
 
   if (Object.keys(patch).length === 0) {
