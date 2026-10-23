@@ -1977,11 +1977,8 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
       if (status === 'draft') return { label: 'Being designed', cssClass: 'badge-muted' };
       if (status === 'queued') return { label: 'Ready to build', cssClass: 'badge-normal' };
       if (status === 'running') return { label: 'Building', cssClass: 'badge-warn' };
-      if (status === 'succeeded') {
-        if (!plan.reviewed_at) return { label: 'Done — awaiting design check', cssClass: 'badge-warn' };
-        const checkedDate = new Date(plan.reviewed_at).toLocaleDateString();
-        return { label: 'Done ✓ checked ' + checkedDate, cssClass: 'badge-good' };
-      }
+      // Review gate removed 2026-10-23 (Charles): succeeded means done.
+      if (status === 'succeeded') return { label: 'Done', cssClass: 'badge-good' };
       if (status === 'failed') return { label: 'Stuck — failed', cssClass: 'badge-urgent' };
       if (status === 'blocked') return { label: 'Stuck — waiting', cssClass: 'badge-warn' };
       if (status === 'abandoned') return { label: 'Shelved for good', cssClass: 'badge-muted' };
