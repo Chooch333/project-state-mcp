@@ -109,7 +109,23 @@ function readLines(raw: unknown, field: string): Line[] {
   });
 }
 
-function readContext(raw: unknown): Context | undefined {
+// Clients holding an older tool schema send objects/lists as JSON text; accept that.
+function maybeJson(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw;
+  const s = raw.trim();
+  if (!s) return undefined;
+  if (s.startsWith('{') || s.startsWith('[')) {
+    try {
+      return JSON.parse(s);
+    } catch {
+      return raw;
+    }
+  }
+  return raw;
+}
+
+function readContext(input: unknown): Context | undefined {
+  const raw = maybeJson(input);
   if (raw === undefined || raw === null) return undefined;
   if (typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('context must be {stand, done, left, watch, recommend, verdict}.');
