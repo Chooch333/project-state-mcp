@@ -2514,7 +2514,7 @@ async function describeCapabilities(supabase: SupabaseClient, _args: Args): Prom
     update_fill_gaps: 'update_change_reason fills in a missing reason on a supersession. update_provenance fills in missing provenance on a decision or plan. add_tags appends tags.',
     history_walkers: 'get_decision_chain walks supersession history for a decision. get_plan_revisions walks a plan\'s edit history. Both show how thinking evolved.',
     project_registration: 'create_project to register a new project. list_projects to see what exists.',
-    next_steps_list: 'checkin (every turn of a with-Charles chat that can be left mid-way; unchanged line = nothing written), close_thread (when the chat\'s stated finish happens), list_open_threads (oldest first). Feeds the Next steps list on cbrain\'s Dev tab. Plain words only — ids like TH-004 are refused. Rule: agent-library references/thread-checkin.md.',
+    next_steps_list: 'checkin (every turn of a with-Charles chat that can be left mid-way; unchanged line = nothing written), close_thread (when the chat\'s stated finish happens), list_open_threads (oldest first). Feeds the Next steps list on cbrain\'s Dev tab. checkin also takes context (checked status: stand, done/left/watch lines, recommend, verdict), checked_at and chats (merged by url, never dropped); identical context writes nothing and never moves the card. plain_name is the build (the card\'s title). project and campaign are Charles\'s, set only on the Dev tab — no tool writes them; project_label is accepted and ignored. Plain words only (including every text in context) — ids like TH-004 are refused. Rule: agent-library references/thread-checkin.md.',
   };
 
   const usage_tips = [
