@@ -179,6 +179,7 @@ export async function checkin(supabase: SupabaseClient, args: Args): Promise<str
   if (!(WAITING_ON as readonly string[]).includes(waiting_on)) {
     throw new Error(`waiting_on must be one of: ${WAITING_ON.join(', ')}.`);
   }
+  args = { ...args, links: maybeJson(args.links), chats: maybeJson(args.chats) };
   const links = readLinks(args.links);
   const chat_url =
     typeof args.chat_url === 'string' && args.chat_url.trim().length > 0 ? args.chat_url.trim() : undefined;
