@@ -69,6 +69,13 @@ const IDENTIFIER_TAG_PATTERN = /^[a-z]+-?\d+$/;
 //     for every case actually observed.
 const SLUG_TAG_MIN_SEGMENTS = 3;
 
+// Words that end in "s" but are not plurals, so singularize() must leave them
+// alone. Names first: "charles" was being stored as "charle" on next moves
+// meant for Charles, so an exact-match filter on "charles" missed them
+// (TH-J-046, Build 61, 2026-11-03). Add a word here when another one is
+// caught being mangled; keep it to real cases, not a dictionary.
+const NEVER_SINGULARIZE = new Set<string>(['charles']);
+
 function isSlugShaped(tag: string): boolean {
   if (IDENTIFIER_TAG_PATTERN.test(tag)) return true;
   return tag.split('-').length >= SLUG_TAG_MIN_SEGMENTS;
