@@ -96,6 +96,7 @@ function isSlugShaped(tag: string): boolean {
  *   " Photos  "      → "photo"
  *   "user's data!"   → "users-data"  // apostrophe/punctuation stripped, s at end dropped
  *   "stress"         → "stress"      // not singularized (ends in ss)
+ *   "Charles"        → "charles"     // on the NEVER_SINGULARIZE list
  *   "bb-2026-08-18-hygiene-census-fixes" → unchanged (slug-shaped, exempt from singularization)
  */
 export function normalizeOne(tag: unknown): string | null {
