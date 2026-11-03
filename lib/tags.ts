@@ -121,7 +121,8 @@ export function normalizeOne(tag: unknown): string | null {
     // Conservative singularization on the final hyphenated segment.
     // This handles "stop-photos" → "stop-photo" without touching the stem.
     const parts = t.split('-');
-    parts[parts.length - 1] = singularize(parts[parts.length - 1]);
+    const last = parts[parts.length - 1];
+    parts[parts.length - 1] = NEVER_SINGULARIZE.has(last) ? last : singularize(last);
     t = parts.join('-');
   }
 
