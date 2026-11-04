@@ -70,9 +70,9 @@ console.log('=== BB-2026-08-19-identifier-tag-exemption-extension verification =
 }
 
 {
-  // Non-regression: ordinary 2-segment plural compounds must still singularize.
+  // Build 67 reverses C-057 for hyphenated tags, on Charles's brief.
   const norm = normalizeOne('merge-candidates');
-  assertTrue(norm === 'merge-candidate', 'Non-regression: merge-candidates still singularizes to merge-candidate (C-057 intended behavior)', `got ${JSON.stringify(norm)}`);
+  assertTrue(norm === 'merge-candidates', 'Build 67: merge-candidates keeps its s', `got ${JSON.stringify(norm)}`);
 }
 
 {
