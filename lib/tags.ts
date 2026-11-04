@@ -296,9 +296,9 @@ export function reconcileWithExisting(
   inputTags: string[],
   existingTags: Set<string>,
   threshold = SIMILARITY_THRESHOLD
-): { final: string[]; substitutions: Array<{ from: string; to: string; score: number }> } {
+): { final: string[]; substitutions: TagSubstitution[] } {
   const final = new Set<string>();
-  const substitutions: Array<{ from: string; to: string; score: number }> = [];
+  const substitutions: TagSubstitution[] = [];
 
   for (const inp of inputTags) {
     if (existingTags.has(inp)) {
