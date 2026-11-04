@@ -117,10 +117,10 @@ export interface TagSubstitution {
  * Returns null if the input isn't a usable tag (empty after cleaning).
  *
  * Examples:
- *   "Photos"         → "photo"
+ *   "Files"          → "file"
  *   "Build Manager"  → "build-manager"
  *   "build_manager"  → "build-manager"
- *   " Photos  "      → "photo"
+ *   "expert-lanes"   → "expert-lanes"   // hyphenated, never singularized
  *   "user's data!"   → "users-data"  // apostrophe/punctuation stripped, s at end dropped
  *   "stress"         → "stress"      // not singularized (ends in ss)
  *   "Charles"        → "charles"     // on the NEVER_SINGULARIZE list
