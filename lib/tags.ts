@@ -338,12 +338,12 @@ export async function normalizeAndReconcile(
   supabase: SupabaseClient,
   rawTags: unknown,
   projectId: string | null
-): Promise<{ tags: string[]; substitutions: Array<{ from: string; to: string; score: number }> }> {
-  const normalized = normalizeTags(rawTags);
+): Promise<{ tags: string[]; substitutions: TagSubstitution[] }> {
+  const { tags: normalized, substitutions: shortened } = normalizeTagsReporting(rawTags);
   if (normalized.length === 0) return { tags: [], substitutions: [] };
   const existing = await loadExistingTags(supabase, projectId);
   const { final, substitutions } = reconcileWithExisting(normalized, existing);
-  return { tags: final, substitutions };
+  return { tags: final, substitutions: [...shortened, ...substitutions] };
 }
 
 /**
