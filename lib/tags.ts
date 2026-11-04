@@ -81,6 +81,33 @@ function isSlugShaped(tag: string): boolean {
   return tag.split('-').length >= SLUG_TAG_MIN_SEGMENTS;
 }
 
+// BB-2026-11-03-stack-fix-log (Build 67): hyphenated tags are names, never
+// plurals to shorten. "expert-lanes" was stored as "expert-lane" and
+// "stack-fixes" as "stack-fix" with no warning, so lookups by the real name
+// missed. This replaces the 2-segment carve-out described above: both
+// "review-corrections" and "merge-candidates" now keep their "s". Only
+// single-word tags are still singularized, and that change is reported in
+// tag_substitutions.
+function isHyphenated(tag: string): boolean {
+  return tag.includes('-');
+}
+
+// The form the old singularizer would have given a hyphenated tag. Fuzzy
+// reconciliation must not reach this one tag, or it would do the shortening
+// that normalizeOne no longer does.
+function shortenedForm(tag: string): string {
+  const parts = tag.split('-');
+  parts[parts.length - 1] = singularize(parts[parts.length - 1]);
+  return parts.join('-');
+}
+
+export interface TagSubstitution {
+  from: string;
+  to: string;
+  score: number;
+  reason?: 'singularized' | 'near-match';
+}
+
 // ─────────────────────────────────────────────────────────
 // Normalization: shape a raw string into a canonical tag.
 // ─────────────────────────────────────────────────────────
