@@ -208,6 +208,29 @@ export function normalizeTags(tags: unknown): string[] {
   return Array.from(out);
 }
 
+/**
+ * normalizeTags, plus a report of every word the normalizer changed. Case,
+ * spacing and punctuation clean-up is not a substitution; singularizing a
+ * single-word tag is.
+ */
+export function normalizeTagsReporting(
+  tags: unknown
+): { tags: string[]; substitutions: TagSubstitution[] } {
+  if (!Array.isArray(tags)) return { tags: [], substitutions: [] };
+  const out = new Set<string>();
+  const substitutions: TagSubstitution[] = [];
+  for (const t of tags) {
+    const cleaned = cleanTag(t);
+    const norm = normalizeOne(t);
+    if (!norm) continue;
+    out.add(norm);
+    if (cleaned && cleaned !== norm && !substitutions.some((s) => s.from === cleaned)) {
+      substitutions.push({ from: cleaned, to: norm, score: 1, reason: 'singularized' });
+    }
+  }
+  return { tags: Array.from(out), substitutions };
+}
+
 // ─────────────────────────────────────────────────────────
 // Trigram similarity — used for fuzzy tag reconciliation.
 // Matches Postgres pg_trgm's approach so behavior is predictable.
