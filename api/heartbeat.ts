@@ -11,7 +11,11 @@
 //     rules_repairer:  { last_run },    newest punch_checkpoints.created_at, agent='repairer'
 //                                       (or the newest repairer-authored punch note, if later —
 //                                       runs before Build 27.1 left only notes)
-//     night_runner:    { last_night, last_result } }  newest night_runs row
+//     night_runner:    { last_night, last_result },  newest night_runs row
+//     expert_ce:       { last_receipt } }  (Build 68, BB-2026-11-03-expert-ce) newest
+//                                       notes.created_at on project slug 'expert-bench' whose
+//                                       tags contain 'expert-ce' AND 'ce-receipt' and NOT
+//                                       'ce-attempt' (a receipt that read more than 0 items)
 //
 // A missing value is null, never omitted. On a database error: 200 with ok:false,
 // db_ok:false and a short error string (no stack trace).
@@ -20,6 +24,8 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { getSupabase } from '../lib/supabase';
 
 const RESULT_WORDS = new Set(['built', 'skipped', 'stuck', 'deploy-red', 'interrupted', 'night-start']);
+
+const EXPERT_CE_PROJECT_SLUG = 'expert-bench';
 
 function iso(v: unknown): string | null {
   if (typeof v !== 'string' || v.length === 0) return null;
@@ -47,6 +53,26 @@ async function newest(
   return data && data.length > 0 ? (data[0] as Record<string, any>) : null;
 }
 
+// Newest expert-ce receipt note on the expert-bench project. The project id is looked up
+// by slug and used only inside this query — it never appears in the response.
+async function newestExpertCeReceipt(): Promise<Record<string, any> | null> {
+  const sb = getSupabase();
+  const proj = await sb.from('projects').select('id').eq('slug', EXPERT_CE_PROJECT_SLUG).limit(1);
+  if (proj.error) throw new Error('projects: ' + proj.error.message);
+  const projectId = proj.data && proj.data.length > 0 ? (proj.data[0] as any).id : null;
+  if (!projectId) return null;
+  const { data, error } = await sb
+    .from('notes')
+    .select('created_at')
+    .eq('project_id', projectId)
+    .contains('tags', ['expert-ce', 'ce-receipt'])
+    .not('tags', 'cs', '{ce-attempt}')
+    .order('created_at', { ascending: false, nullsFirst: false })
+    .limit(1);
+  if (error) throw new Error('notes: ' + error.message);
+  return data && data.length > 0 ? (data[0] as Record<string, any>) : null;
+}
+
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-store');
@@ -61,11 +87,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   const checkedAt = new Date().toISOString();
   try {
-    const [inspector, repairerCp, repairerNote, night] = await Promise.all([
+    const [inspector, repairerCp, repairerNote, night, ceReceipt] = await Promise.all([
       newest('punch_checkpoints', 'created_at', ['agent', 'inspector']),
       newest('punch_checkpoints', 'created_at', ['agent', 'repairer']),
       newest('punch_item_notes', 'created_at', ['author', 'repairer']),
       newest('night_runs', 'created_at', null, 'result'),
+      newestExpertCeReceipt(),
     ]);
     const lastResult = night && typeof night.result === 'string' && RESULT_WORDS.has(night.result) ? night.result : null;
     const body = {
@@ -75,6 +102,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       rules_inspector: { last_walk: iso(inspector?.created_at) },
       rules_repairer: { last_run: later(iso(repairerCp?.created_at), iso(repairerNote?.created_at)) },
       night_runner: { last_night: iso(night?.created_at), last_result: lastResult },
+      expert_ce: { last_receipt: iso(ceReceipt?.created_at) },
     };
     res.statusCode = 200;
     res.end(req.method === 'HEAD' ? undefined : JSON.stringify(body));
@@ -88,6 +116,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       rules_inspector: { last_walk: null },
       rules_repairer: { last_run: null },
       night_runner: { last_night: null, last_result: null },
+      expert_ce: { last_receipt: null },
     };
     res.statusCode = 200;
     res.end(req.method === 'HEAD' ? undefined : JSON.stringify(body));
