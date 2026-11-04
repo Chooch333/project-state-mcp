@@ -311,7 +311,9 @@ export function reconcileWithExisting(
     }
     // Find best fuzzy match above threshold
     let best: { tag: string; score: number } | null = null;
+    const shortened = isHyphenated(inp) ? shortenedForm(inp) : null;
     for (const existing of existingTags) {
+      if (existing === shortened) continue; // never shorten a hyphenated tag
       const score = trigramSimilarity(inp, existing);
       if (score >= threshold && (!best || score > best.score)) {
         best = { tag: existing, score };
@@ -319,7 +321,7 @@ export function reconcileWithExisting(
     }
     if (best) {
       final.add(best.tag);
-      substitutions.push({ from: inp, to: best.tag, score: Number(best.score.toFixed(3)) });
+      substitutions.push({ from: inp, to: best.tag, score: Number(best.score.toFixed(3)), reason: 'near-match' });
     } else {
       final.add(inp);
     }
