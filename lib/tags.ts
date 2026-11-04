@@ -2,7 +2,7 @@
 //
 // Design principles:
 //   - The user (and Claude) never has to tag consistently by hand.
-//   - Tags are normalized at write time to a canonical form (lowercase, hyphenated, singularized).
+//   - Tags are normalized at write time to a canonical form (lowercase, hyphenated; single words singularized).
 //   - Before writing, the server checks if a similar tag already exists; if so, it uses the existing
 //     tag instead of creating a near-duplicate ("photos" → "photo" when "photo" already exists).
 //   - At read time, the same fuzzy expansion is applied to input tags so searches catch near-matches.
