@@ -21,10 +21,10 @@ check(normalizeOne('charles') === 'charles', 'charles stays charles', String(nor
 check(normalizeOne('Charles') === 'charles', 'Charles lowercases to charles', String(normalizeOne('Charles')));
 check(normalizeOne('for charles') === 'for-charles', 'for-charles keeps its s', String(normalizeOne('for charles')));
 
-// Non-regression: ordinary plurals still singularize.
+// Non-regression: ordinary single-word plurals still singularize.
 check(normalizeOne('files') === 'file', 'files -> file');
 check(normalizeOne('changes') === 'change', 'changes -> change');
-check(normalizeOne('merge-candidates') === 'merge-candidate', 'merge-candidates -> merge-candidate');
+check(normalizeOne('merge-candidates') === 'merge-candidates', 'merge-candidates keeps its s (Build 67: hyphenated tags are never singularized)');
 
 // Write path: with both spellings already in the DB, "charles" is an exact hit.
 const existing = new Set(['charle', 'charles', 'walkthrough']);
