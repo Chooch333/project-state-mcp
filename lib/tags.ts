@@ -127,6 +127,17 @@ export interface TagSubstitution {
  *   "bb-2026-08-18-hygiene-census-fixes" → unchanged (slug-shaped, exempt from singularization)
  */
 export function normalizeOne(tag: unknown): string | null {
+  const cleaned = cleanTag(tag);
+  if (!cleaned) return null;
+  // Slug/BB-ID-shaped tags are stable references, not natural-language
+  // plurals, and hyphenated tags are names: only a single plain word is
+  // singularized.
+  if (isHyphenated(cleaned) || isSlugShaped(cleaned)) return cleaned;
+  return NEVER_SINGULARIZE.has(cleaned) ? cleaned : singularize(cleaned);
+}
+
+/** Shape a raw string into tag form: case, spacing and punctuation only. */
+function cleanTag(tag: unknown): string | null {
   if (typeof tag !== 'string') return null;
   let t = tag.trim().toLowerCase();
   if (!t) return null;
@@ -140,18 +151,6 @@ export function normalizeOne(tag: unknown): string | null {
   // Trim leading/trailing hyphens
   t = t.replace(/^-+|-+$/g, '');
   if (!t) return null;
-
-  // Slug/BB-ID-shaped tags are stable references, not natural-language
-  // plurals -- skip singularization entirely so a meaningful trailing "s"
-  // survives (bb-...-fixes stays bb-...-fixes, not bb-...-fix).
-  if (!isSlugShaped(t)) {
-    // Conservative singularization on the final hyphenated segment.
-    // This handles "stop-photos" → "stop-photo" without touching the stem.
-    const parts = t.split('-');
-    const last = parts[parts.length - 1];
-    parts[parts.length - 1] = NEVER_SINGULARIZE.has(last) ? last : singularize(last);
-    t = parts.join('-');
-  }
 
   return t;
 }
