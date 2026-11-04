@@ -63,11 +63,10 @@ console.log('=== BB-2026-08-19-identifier-tag-exemption-extension verification =
 }
 
 {
-  // "review-corrections" is a KNOWN, ACCEPTED false negative (2 segments,
-  // no digits -- indistinguishable from merge-candidates by shape). This
-  // assertion documents the expected (unfixed) behavior, not a bug.
+  // Was a known false negative until BB-2026-11-03-stack-fix-log (Build 67):
+  // hyphenated tags are never singularized now.
   const norm = normalizeOne('review-corrections');
-  assertTrue(norm === 'review-correction', 'Gap1 known false negative, documented: review-corrections still singularizes to review-correction (2-segment tags are not slug-shaped)', `got ${JSON.stringify(norm)}`);
+  assertTrue(norm === 'review-corrections', 'Build 67: review-corrections keeps its s (hyphenated tags are never singularized)', `got ${JSON.stringify(norm)}`);
 }
 
 {
