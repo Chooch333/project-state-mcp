@@ -7,5 +7,11 @@
     "api/backfill.ts": {
       "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/backfill",
+      "schedule": "0 7 * * *"
+    }
+  ]
 }
