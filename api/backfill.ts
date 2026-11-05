@@ -1,12 +1,21 @@
-// One-shot backfill endpoint for embeddings.
+// Backfill endpoint for embeddings. Runs daily on a Vercel cron (vercel.json) and can
+// still be called by hand.
 // Scans every content table for rows with NULL embedding, computes the embedding
 // from the same fields used during normal writes, updates the row.
 // Idempotent — safe to re-run. Respects the same auth pattern as /api/mcp
-// (Bearer header OR ?token=SECRET).
+// (Bearer header OR ?token=SECRET), and also accepts Vercel's cron call, which
+// arrives as Authorization: Bearer $CRON_SECRET (BB-2026-11-04-stack-fix-project-state).
+//
+// A run stops starting new work after TIME_BUDGET_MS so it finishes inside the
+// function's 60-second limit; whatever is left is picked up by the next run, and the
+// summary says stopped_early: true.
 
 import type { IncomingMessage, ServerResponse } from 'http';
 import { getSupabase } from '../lib/supabase';
 import { embed, toPgVector, composeEmbeddingText } from '../lib/embeddings';
+
+const TIME_BUDGET_MS = 45_000;
+const CONCURRENCY = 8;
 
 type ComposeFn = (row: Record<string, any>) => string;
 
@@ -75,6 +84,8 @@ function checkAuth(req: IncomingMessage): boolean {
   if (auth && auth === `Bearer ${expected}`) return true;
   const queryToken = extractQueryToken(req);
   if (queryToken && queryToken === expected) return true;
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && auth === `Bearer ${cronSecret}`) return true;
   return false;
 }
 
@@ -97,6 +108,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   const supabase = getSupabase();
+  const deadline = Date.now() + TIME_BUDGET_MS;
   const summary = {
     started_at: new Date().toISOString(),
     tables: [] as Array<{
@@ -110,10 +122,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     total_candidates: 0,
     total_updated: 0,
     total_failures: 0,
+    stopped_early: false,
     errors: [] as Array<{ table: string; id?: string; reason: string }>,
   };
 
   for (const tbl of TABLES) {
+    if (Date.now() >= deadline) {
+      summary.stopped_early = true;
+      break;
+    }
+
     const selectCols = ['id', ...tbl.columns].join(',');
     const { data: rows, error } = await supabase
       .from(tbl.name)
@@ -135,31 +153,40 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     let embedFailures = 0;
     let dbFailures = 0;
 
-    for (const row of rows ?? []) {
-      const text = tbl.compose(row as Record<string, any>);
+    const processRow = async (row: Record<string, any>) => {
+      const text = tbl.compose(row);
       if (!text || !text.trim()) {
         skippedEmpty++;
-        continue;
+        return;
       }
 
       const vector = await embed(text);
       if (!vector) {
         embedFailures++;
-        summary.errors.push({ table: tbl.name, id: (row as any).id, reason: 'embed() returned null' });
-        continue;
+        summary.errors.push({ table: tbl.name, id: row.id, reason: 'embed() returned null' });
+        return;
       }
 
       const { error: updErr } = await supabase
         .from(tbl.name)
         .update({ embedding: toPgVector(vector) })
-        .eq('id', (row as any).id);
+        .eq('id', row.id);
 
       if (updErr) {
         dbFailures++;
-        summary.errors.push({ table: tbl.name, id: (row as any).id, reason: `update: ${updErr.message}` });
+        summary.errors.push({ table: tbl.name, id: row.id, reason: `update: ${updErr.message}` });
       } else {
         updated++;
       }
+    };
+
+    const list = (rows ?? []) as unknown as Array<Record<string, any>>;
+    for (let i = 0; i < list.length; i += CONCURRENCY) {
+      if (Date.now() >= deadline) {
+        summary.stopped_early = true;
+        break;
+      }
+      await Promise.all(list.slice(i, i + CONCURRENCY).map(processRow));
     }
 
     summary.total_candidates += candidates;
