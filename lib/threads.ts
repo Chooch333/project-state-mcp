@@ -35,7 +35,22 @@ export const THREAD_KINDS = [
   'plan-review',
   'folder-chat',
   'job',
+  'chat',
 ] as const;
+
+// Closing out (Build 78, agent-library references/thread-checkin.md 0.4.0):
+// a card waiting on Charles must be a real ask. These phrases mark a card
+// that has nothing for him to do, so a waiting_on "you" check-in carrying
+// one is refused.
+export const NON_ASK_PHRASES = ['click done', 'nothing is left', 'nothing left', "when you've seen this", 'glance at'] as const;
+export const NON_ASK_MESSAGE = 'Nothing here waits on Charles — close the card, or say what he must choose.';
+
+export function nonAskPhrase(next_step: string): string | null {
+  // Fold curly apostrophes so "when you’ve seen this" is caught too.
+  const t = next_step.toLowerCase().replace(/[‘’]/g, "'");
+  for (const p of NON_ASK_PHRASES) if (t.includes(p)) return p;
+  return null;
+}
 
 export const WAITING_ON = ['you', 'claude', 'a-build', 'nobody'] as const;
 export const CHAT_ROLES = ['designed-in', 'last-worked-in', 'build-session', 'other'] as const;
