@@ -2921,6 +2921,17 @@ It doesn't substitute for your judgment. Claude will ask you when provenance or 
     // ─────────────────────────────────────────────────────────
     // Boot
     // ─────────────────────────────────────────────────────────
+    // Bookmark sign-in: opening dashboard.html#token=<secret> saves the
+    // token, then strips it from the address bar. Chrome keeps wiping the
+    // saved token (site-data clearing); a bookmark survives that, so the
+    // prompt never comes back. The #part never reaches the server or logs.
+    (function tokenFromBookmark() {
+      const m = location.hash.match(/(?:^#|&)token=([^&]+)/);
+      if (!m) return;
+      setToken(decodeURIComponent(m[1]).trim());
+      history.replaceState(null, '', location.pathname + location.search);
+    })();
+
     if (!getToken()) {
       promptForToken();
     } else {
