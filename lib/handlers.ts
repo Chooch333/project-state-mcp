@@ -1550,7 +1550,7 @@ async function updateAssumption(supabase: SupabaseClient, args: Args): Promise<s
 async function addBlocker(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.blocker(args.question, args.context));
-  const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
   // raised_at is the user-facing name (blockers are raised); stored in created_at.
   const raisedAt = parseOverrideTimestamp(args.raised_at, 'raised_at');
   const insertRow: any = {
