@@ -1530,7 +1530,7 @@ async function addAssumption(supabase: SupabaseClient, args: Args): Promise<stri
   const { data, error } = await supabase.from('assumptions').insert(insertRow)
     .select('id, display_id, statement, alternatives, status, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions, new_tags: newTags }, null, 2);
 }
 
 async function updateAssumption(supabase: SupabaseClient, args: Args): Promise<string> {
