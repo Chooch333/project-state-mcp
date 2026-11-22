@@ -1197,7 +1197,7 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
 async function addLesson(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.lesson(args.situation, args.lesson, args.applies_to));
-  const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
   const createdAt = parseOverrideTimestamp(args.created_at, 'created_at');
   const insertRow: any = {
     project_id: projectId,
