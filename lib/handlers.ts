@@ -1186,6 +1186,7 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
     promoted_to_entity: target_entity,
     new_row: newRow,
     tag_substitutions: substitutions,
+    new_tags: newTags,
   }, null, 2);
 }
 
