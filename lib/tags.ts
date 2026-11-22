@@ -305,15 +305,13 @@ export function reconcileWithExisting(
       final.add(inp);
       continue;
     }
-    if (isSlugShaped(inp)) {
-      final.add(inp);
+    if (isSlugShaped(inp) || isHyphenated(inp)) {
+      final.add(inp); // names and identifiers are stored as written
       continue;
     }
-    // Find best fuzzy match above threshold
+    // Find best fuzzy match above threshold (single-word tags only)
     let best: { tag: string; score: number } | null = null;
-    const shortened = isHyphenated(inp) ? shortenedForm(inp) : null;
     for (const existing of existingTags) {
-      if (existing === shortened) continue; // never shorten a hyphenated tag
       const score = trigramSimilarity(inp, existing);
       if (score >= threshold && (!best || score > best.score)) {
         best = { tag: existing, score };
