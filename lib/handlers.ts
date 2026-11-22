@@ -1515,7 +1515,7 @@ async function getDecisionChain(supabase: SupabaseClient, args: Args): Promise<s
 async function addAssumption(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.assumption(args.statement, args.alternatives));
-  const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
   // observed_at is the user-facing name (you observe assumptions, not "create" them); stored in created_at.
   const observedAt = parseOverrideTimestamp(args.observed_at, 'observed_at');
   const insertRow: any = {
