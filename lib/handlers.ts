@@ -1874,7 +1874,7 @@ async function listBoard(supabase: SupabaseClient, args: Args): Promise<string> 
 async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.plan(args.title, args.content));
-  const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
 
   const provenance = (typeof args.provenance === 'string' && args.provenance.trim().length > 0)
     ? args.provenance.trim()
