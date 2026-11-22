@@ -1946,7 +1946,7 @@ async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> 
     console.error('Failed to seed revision 1:', revErr.message);
   }
 
-  const response: any = { ...data, tag_substitutions: substitutions };
+  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags };
   if (!provenance) {
     response.warning =
       'provenance was not provided. The plan is recorded but "how we got here" is not captured. ' +
