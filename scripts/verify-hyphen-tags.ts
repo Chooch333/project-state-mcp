@@ -13,6 +13,10 @@
 // write pipeline reports tags new to the project. Uses a fake Supabase client,
 // so no rows are written anywhere.
 //
+// Build 91 night revision adds: lens stays lens (NEVER_SINGULARIZE); a failed
+// table read marks new_tags as partial (newTagsPartial), and a clean read
+// does not.
+//
 // Run: npx tsx scripts/verify-hyphen-tags.ts
 
 import { normalizeOne, normalizeTagsReporting, normalizeAndReconcile, reconcileWithExisting, trigramSimilarity } from '../lib/tags';
@@ -32,6 +36,7 @@ check(normalizeOne('expert_lanes') === 'expert-lanes', 'expert_lanes -> expert-l
 // Single words still singularize, and the change is reported.
 check(normalizeOne('files') === 'file', 'files -> file');
 check(normalizeOne('charles') === 'charles', 'charles stays charles');
+check(normalizeOne('lens') === 'lens', 'lens stays lens');
 {
   const r = normalizeTagsReporting(['Files', 'Build Manager', 'expert-lanes']);
   check(JSON.stringify(r.tags) === JSON.stringify(['file', 'build-manager', 'expert-lanes']), 'tags normalized', JSON.stringify(r.tags));
@@ -91,5 +96,23 @@ normalizeAndReconcile(fakeSupabase, ['expert-lanes', 'Photos', 'Files', 'ce-disp
   const expectedNew = ['expert-lanes', 'file', 'ce-dispatch'];
   check(r.newTags.length === expectedNew.length && expectedNew.every((t) => r.newTags.includes(t)),
     'pipeline reports new tags (not photo)', JSON.stringify(r.newTags));
+  check(r.newTagsPartial === false, 'clean reads: new tags are not marked partial', String(r.newTagsPartial));
+}).then(() => {
+  // A failed table read: that table's tags are missing, so photo looks new.
+  // The pipeline must say new tags may be incomplete.
+  let calls = 0;
+  const failingSupabase = {
+    from() {
+      calls++;
+      const failed = calls === 1;
+      return { select() { return Promise.resolve(failed
+        ? { data: null, error: { message: 'simulated read failure' } }
+        : { data: [{ tags: ['expert-lane'] }], error: null }); } };
+    },
+  } as any;
+  return normalizeAndReconcile(failingSupabase, ['photo', 'expert-lanes'], null);
+}).then((r) => {
+  check(r.newTagsPartial === true, 'a failed table read marks new tags partial', String(r.newTagsPartial));
+  check(r.newTags.includes('photo'), 'the failed read is why photo shows as new', JSON.stringify(r.newTags));
   process.exit(failures === 0 ? 0 : 1);
 });
