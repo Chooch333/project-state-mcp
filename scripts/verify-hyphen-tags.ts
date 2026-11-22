@@ -81,10 +81,15 @@ const fakeSupabase = {
   },
 } as any;
 
-normalizeAndReconcile(fakeSupabase, ['expert-lanes', 'Photos', 'Files'], null).then((r) => {
+normalizeAndReconcile(fakeSupabase, ['expert-lanes', 'Photos', 'Files', 'ce-dispatch'], null).then((r) => {
   check(r.tags.includes('expert-lanes') && !r.tags.includes('expert-lane'), 'pipeline stores expert-lanes', JSON.stringify(r.tags));
+  check(r.tags.includes('ce-dispatch') && !r.tags.includes('ce-dispatch-failed'), 'pipeline stores ce-dispatch', JSON.stringify(r.tags));
   check(r.substitutions.some((s) => s.from === 'files' && s.to === 'file'), 'pipeline reports files -> file', JSON.stringify(r.substitutions));
   check(r.substitutions.some((s) => s.from === 'photos' && s.to === 'photo'), 'pipeline reports photos -> photo', JSON.stringify(r.substitutions));
   check(r.substitutions.length === 2, 'pipeline reports nothing else', JSON.stringify(r.substitutions));
+  // new_tags: stored tags not yet used on the project. photo already exists.
+  const expectedNew = ['expert-lanes', 'file', 'ce-dispatch'];
+  check(r.newTags.length === expectedNew.length && expectedNew.every((t) => r.newTags.includes(t)),
+    'pipeline reports new tags (not photo)', JSON.stringify(r.newTags));
   process.exit(failures === 0 ? 0 : 1);
 });
