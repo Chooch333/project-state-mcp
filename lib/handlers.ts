@@ -1280,10 +1280,12 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
   // If caller passed tags, reconcile them. Otherwise keep the old decision's tags as-is.
   let tags: string[];
   let substitutions: Array<{ from: string; to: string; score: number }> = [];
+  let newTags: string[] = [];
   if (args.tags && Array.isArray(args.tags) && args.tags.length > 0) {
     const result = await normalizeAndReconcile(supabase, args.tags, oldRow.project_id);
     tags = result.tags;
     substitutions = result.substitutions;
+    newTags = result.newTags;
   } else {
     tags = oldRow.tags ?? [];
   }
