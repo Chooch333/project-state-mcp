@@ -1599,7 +1599,7 @@ async function addNextMove(supabase: SupabaseClient, args: Args): Promise<string
   const { data, error } = await supabase.from('next_moves').insert(insertRow)
     .select('id, display_id, description, priority, estimated_effort, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  const response: any = { ...data, tag_substitutions: substitutions };
+  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags };
   const boardReminder = await boardReminderFor(supabase, args.chat_tag);
   if (boardReminder) response.board_reminder = boardReminder;
   return JSON.stringify(response, null, 2);
