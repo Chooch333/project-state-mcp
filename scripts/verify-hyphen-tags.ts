@@ -48,6 +48,26 @@ check(normalizeOne('charles') === 'charles', 'charles stays charles');
   const r = reconcileWithExisting(['stack-fixes'], new Set(['stack-fix']));
   check(r.final[0] === 'stack-fixes' && r.substitutions.length === 0, 'stack-fixes is not pulled onto stack-fix', JSON.stringify(r));
 }
+// Build 91: a new hyphenated tag is stored as written, even when an existing
+// tag is a near-match above the threshold.
+{
+  const score = trigramSimilarity('ce-dispatch', 'ce-dispatch-failed');
+  console.log(`INFO: trigramSimilarity('ce-dispatch', 'ce-dispatch-failed') = ${score.toFixed(3)} (bug precondition: at or above the threshold)`);
+  const r = reconcileWithExisting(['ce-dispatch'], new Set(['ce-dispatch-failed']));
+  check(r.final.length === 1 && r.final[0] === 'ce-dispatch' && r.substitutions.length === 0,
+    'ce-dispatch stays ce-dispatch beside ce-dispatch-failed', JSON.stringify(r));
+}
+{
+  // The trailing-s cut stays gone for hyphenated tags (the project-lens next move).
+  const r = reconcileWithExisting([normalizeOne('project-lens') as string], new Set(['project-len']));
+  check(r.final[0] === 'project-lens' && r.substitutions.length === 0, 'project-lens is not pulled onto project-len', JSON.stringify(r));
+}
+// Negative control: a single word still reconciles onto its near-match.
+{
+  const r = reconcileWithExisting(['dispatch'], new Set(['dispatched']));
+  check(r.final[0] === 'dispatched' && r.substitutions[0]?.reason === 'near-match',
+    'single word dispatch is still pulled onto dispatched (negative control)', JSON.stringify(r));
+}
 // Other near-matches still reconcile, and are reported.
 {
   const r = reconcileWithExisting(['photos'], new Set(['photo']));
