@@ -2588,7 +2588,7 @@ async function postJudgmentCall(supabase: SupabaseClient, args: Args): Promise<s
     .select('id, display_id, title, context, status, origin, plan_id, tags, plain_summary, action_needed, created_at').single();
   if (error) throw new Error(error.message);
 
-  const response: any = { ...data, tag_substitutions: substitutions };
+  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags };
   // Soft enforcement, never a rejection: a disclosure with no plain_summary still posts
   // fine — the warning just asks the calling chat to supply one next time.
   if (!plainSummary) {
