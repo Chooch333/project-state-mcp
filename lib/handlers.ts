@@ -979,7 +979,7 @@ async function addTagsToRow(supabase: SupabaseClient, args: Args): Promise<strin
   if (!row) throw new Error(`${entityType} not found: ${id}`);
 
   // Reconcile the new tags against existing tags in the same project scope
-  const { tags: reconciled, substitutions } = await normalizeAndReconcile(supabase, args.tags, row.project_id);
+  const { tags: reconciled, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, row.project_id);
   if (reconciled.length === 0) throw new Error('tags array must contain at least one non-empty tag after normalization');
 
   const merged = Array.from(new Set([...(row.tags ?? []), ...reconciled]));
