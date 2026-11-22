@@ -2443,7 +2443,7 @@ async function updateCampaign(supabase: SupabaseClient, args: Args): Promise<str
 async function writeStatusSnapshot(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.snapshot(args.narrative));
-  const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
   // observed_at describes the moment the narrative captures; stored in created_at.
   const observedAt = parseOverrideTimestamp(args.observed_at, 'observed_at');
   const insertRow: any = {
