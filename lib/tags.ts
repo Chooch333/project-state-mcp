@@ -330,18 +330,21 @@ export function reconcileWithExisting(
 
 /**
  * Full reconciliation pipeline for writes: normalize the raw input,
- * then reconcile against existing tags.
+ * then reconcile against existing tags. newTags lists the stored tags not yet
+ * used on the project (Build 91), so a write reply shows a brand-new tag
+ * beside tag_substitutions.
  */
 export async function normalizeAndReconcile(
   supabase: SupabaseClient,
   rawTags: unknown,
   projectId: string | null
-): Promise<{ tags: string[]; substitutions: TagSubstitution[] }> {
+): Promise<{ tags: string[]; substitutions: TagSubstitution[]; newTags: string[] }> {
   const { tags: normalized, substitutions: shortened } = normalizeTagsReporting(rawTags);
-  if (normalized.length === 0) return { tags: [], substitutions: [] };
+  if (normalized.length === 0) return { tags: [], substitutions: [], newTags: [] };
   const existing = await loadExistingTags(supabase, projectId);
   const { final, substitutions } = reconcileWithExisting(normalized, existing);
-  return { tags: final, substitutions: [...shortened, ...substitutions] };
+  const newTags = final.filter((t) => !existing.has(t));
+  return { tags: final, substitutions: [...shortened, ...substitutions], newTags };
 }
 
 /**
