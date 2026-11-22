@@ -2557,7 +2557,7 @@ async function describeCapabilities(supabase: SupabaseClient, _args: Args): Prom
 async function postJudgmentCall(supabase: SupabaseClient, args: Args): Promise<string> {
   if (!args.plan_id) throw new Error('plan_id is required — every disclosure is bound to the brief that produced it.');
   const projectId = await resolveProjectId(supabase, args.project_slug);
-  const { tags, substitutions } = await normalizeAndReconcile(
+  const { tags, substitutions, newTags } = await normalizeAndReconcile(
     supabase,
     [...(Array.isArray(args.tags) ? args.tags : []), 'judgment-call'],
     projectId
