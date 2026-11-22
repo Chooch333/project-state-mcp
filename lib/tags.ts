@@ -288,7 +288,8 @@ export async function loadExistingTags(
 
 /**
  * Given input tags (already normalized), return the set to actually persist.
- * Exact matches pass through. Near-matches above threshold are replaced with
+ * Exact matches pass through. Hyphenated and slug-shaped tags pass through as
+ * written. Single-word near-matches above threshold are replaced with
  * the existing canonical tag (prevents photo/photos drift).
  * Tags with no close match are kept as-is — they become the canonical version
  * for future writes.
