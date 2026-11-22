@@ -1088,10 +1088,12 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
   // Tags: if caller passes tags, normalize and reconcile them. Otherwise carry over note's tags + topic.
   let tags: string[];
   let substitutions: Array<{ from: string; to: string; score: number }> = [];
+  let newTags: string[] = [];
   if (args.tags && Array.isArray(args.tags) && args.tags.length > 0) {
     const result = await normalizeAndReconcile(supabase, args.tags, projectId);
     tags = result.tags;
     substitutions = result.substitutions;
+    newTags = result.newTags;
   } else {
     const carryoverTags = note.tags ?? [];
     const topicAsTag = note.topic ? [note.topic.toLowerCase()] : [];
