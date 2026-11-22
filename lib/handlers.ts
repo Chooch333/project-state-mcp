@@ -1248,7 +1248,7 @@ async function logDecision(supabase: SupabaseClient, args: Args): Promise<string
     .select('id, display_id, title, rationale, alternatives_considered, provenance, tags, source, decided_at').single();
   if (error) throw new Error(error.message);
 
-  const response: any = { ...data, tag_substitutions: substitutions };
+  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags };
   if (!provenance) {
     response.warning =
       'provenance was not provided. The decision is recorded but "how we got here" is not captured. ' +
