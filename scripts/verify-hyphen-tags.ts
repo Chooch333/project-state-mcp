@@ -15,7 +15,7 @@
 //
 // Run: npx tsx scripts/verify-hyphen-tags.ts
 
-import { normalizeOne, normalizeTagsReporting, normalizeAndReconcile, reconcileWithExisting } from '../lib/tags';
+import { normalizeOne, normalizeTagsReporting, normalizeAndReconcile, reconcileWithExisting, trigramSimilarity } from '../lib/tags';
 
 let failures = 0;
 function check(pass: boolean, label: string, detail = ''): void {
