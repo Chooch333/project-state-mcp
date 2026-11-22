@@ -7,6 +7,12 @@
 // near-match substitutions are still reported; clean-up of case and spacing
 // is not reported.
 //
+// Build 91 (BB-2026-11-19-tag-rewrite-fix) adds: a new hyphenated tag is
+// never pulled onto an existing near-match (ce-dispatch stays ce-dispatch
+// beside ce-dispatch-failed); a single word still is (negative control); the
+// write pipeline reports tags new to the project. Uses a fake Supabase client,
+// so no rows are written anywhere.
+//
 // Run: npx tsx scripts/verify-hyphen-tags.ts
 
 import { normalizeOne, normalizeTagsReporting, normalizeAndReconcile, reconcileWithExisting } from '../lib/tags';
