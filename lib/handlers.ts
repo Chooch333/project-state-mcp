@@ -1310,7 +1310,7 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
     .select('id, display_id, title, rationale, change_reason, provenance, tags, source, supersedes, decided_at').single();
   if (error) throw new Error(error.message);
 
-  const response: any = { ...data, tag_substitutions: substitutions };
+  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags };
   const warnings: string[] = [];
   if (!providedReason) {
     warnings.push(
