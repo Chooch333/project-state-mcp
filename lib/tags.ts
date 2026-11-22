@@ -92,14 +92,14 @@ function isHyphenated(tag: string): boolean {
   return tag.includes('-');
 }
 
-// The form the old singularizer would have given a hyphenated tag. Fuzzy
-// reconciliation must not reach this one tag, or it would do the shortening
-// that normalizeOne no longer does.
-function shortenedForm(tag: string): string {
-  const parts = tag.split('-');
-  parts[parts.length - 1] = singularize(parts[parts.length - 1]);
-  return parts.join('-');
-}
+// BB-2026-11-19-tag-rewrite-fix (Build 91): hyphenated tags are also kept out
+// of fuzzy reconciliation altogether, so a brand-new hyphenated tag is stored
+// as written. "ce-dispatch" was being pulled onto an existing
+// "ce-dispatch-failed" (trigram score above the threshold), so the Sunday
+// expert run's tag read back as a "failed" tag two weeks running. This also
+// retires the old one-tag guard (the shortened form) that Build 67 added here:
+// with no near-match step for hyphenated tags, nothing can shorten them.
+// Single words keep reconciling (photos -> photo).
 
 export interface TagSubstitution {
   from: string;
