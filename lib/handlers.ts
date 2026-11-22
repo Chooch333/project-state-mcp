@@ -2504,7 +2504,7 @@ async function describeCapabilities(supabase: SupabaseClient, _args: Args): Prom
 
   const standing_principles = [
     'System carries discipline, not user. Server normalizes tags, reconciles near-duplicates, regenerates embeddings, defaults to safe behavior. You tag and write however is natural.',
-    'Silent-work, visible-narration pattern. Server does the work; response includes fields describing what was done (tag_substitutions, warnings, project_counts). Claude relays to the user conversationally.',
+    'Silent-work, visible-narration pattern. Server does the work; response includes fields describing what was done (tag_substitutions, new_tags, warnings, project_counts). Claude relays to the user conversationally.',
     'Never fabricate defaults. If change_reason or provenance is unknown, store null and return a warning. A null field is more honest than a meaningless placeholder. Ask the user rather than inventing.',
     'Explicit opt-in for cross-project. Any read that could span projects (search_state, find_by_tags, get_activity) requires either project_slug or all_projects=true. Omitting both is an error.',
     'Soft-requirement pattern: fields like change_reason and provenance are strongly preferred but not strictly required. Missing surfaces a warning with the ID needed to fill it in later — never blocks the write.',
