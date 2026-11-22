@@ -985,7 +985,7 @@ async function addTagsToRow(supabase: SupabaseClient, args: Args): Promise<strin
   const merged = Array.from(new Set([...(row.tags ?? []), ...reconciled]));
   const { data, error } = await supabase.from(table).update({ tags: merged }).eq('id', id).select('id, tags').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify({ ...data, tag_substitutions: substitutions }, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions, new_tags: newTags }, null, 2);
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
