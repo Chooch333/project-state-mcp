@@ -1223,7 +1223,7 @@ async function addLesson(supabase: SupabaseClient, args: Args): Promise<string> 
 async function logDecision(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.decision(args.title, args.rationale, args.alternatives_considered));
-  const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
 
   // provenance: optional. If provided, clean and store. If not, store null and warn.
   const provenance = (typeof args.provenance === 'string' && args.provenance.trim().length > 0)
