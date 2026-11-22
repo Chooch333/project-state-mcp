@@ -77,7 +77,7 @@ check(normalizeOne('charles') === 'charles', 'charles stays charles');
 // The whole write pipeline carries both kinds of report.
 const fakeSupabase = {
   from() {
-    return { select() { return Promise.resolve({ data: [{ tags: ['photo', 'expert-lane'] }], error: null }); } };
+    return { select() { return Promise.resolve({ data: [{ tags: ['photo', 'expert-lane', 'ce-dispatch-failed'] }], error: null }); } };
   },
 } as any;
 
