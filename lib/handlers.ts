@@ -979,13 +979,13 @@ async function addTagsToRow(supabase: SupabaseClient, args: Args): Promise<strin
   if (!row) throw new Error(`${entityType} not found: ${id}`);
 
   // Reconcile the new tags against existing tags in the same project scope
-  const { tags: reconciled, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, row.project_id);
+  const { tags: reconciled, substitutions, newTags, newTagsPartial } = await normalizeAndReconcile(supabase, args.tags, row.project_id);
   if (reconciled.length === 0) throw new Error('tags array must contain at least one non-empty tag after normalization');
 
   const merged = Array.from(new Set([...(row.tags ?? []), ...reconciled]));
   const { data, error } = await supabase.from(table).update({ tags: merged }).eq('id', id).select('id, tags').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify({ ...data, tag_substitutions: substitutions, new_tags: newTags }, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions, new_tags: newTags, ...(newTagsPartial ? { new_tags_partial: true } : {}) }, null, 2);
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -1056,7 +1056,7 @@ async function createProject(supabase: SupabaseClient, args: Args): Promise<stri
 async function addNote(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.note(args.content, args.topic));
-  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags, newTagsPartial } = await normalizeAndReconcile(supabase, args.tags, projectId);
   const createdAt = parseOverrideTimestamp(args.created_at, 'created_at');
   const insertRow: any = {
     project_id: projectId,
@@ -1070,7 +1070,7 @@ async function addNote(supabase: SupabaseClient, args: Args): Promise<string> {
   const { data, error } = await supabase.from('notes').insert(insertRow)
     .select('id, display_id, content, topic, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags };
+  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags, ...(newTagsPartial ? { new_tags_partial: true } : {}) };
   const boardReminder = await boardReminderFor(supabase, args.chat_tag);
   if (boardReminder) response.board_reminder = boardReminder;
   return JSON.stringify(response, null, 2);
@@ -1089,11 +1089,13 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
   let tags: string[];
   let substitutions: Array<{ from: string; to: string; score: number }> = [];
   let newTags: string[] = [];
+  let newTagsPartial = false;
   if (args.tags && Array.isArray(args.tags) && args.tags.length > 0) {
     const result = await normalizeAndReconcile(supabase, args.tags, projectId);
     tags = result.tags;
     substitutions = result.substitutions;
     newTags = result.newTags;
+    newTagsPartial = result.newTagsPartial;
   } else {
     const carryoverTags = note.tags ?? [];
     const topicAsTag = note.topic ? [note.topic.toLowerCase()] : [];
@@ -1187,6 +1189,7 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
     new_row: newRow,
     tag_substitutions: substitutions,
     new_tags: newTags,
+    ...(newTagsPartial ? { new_tags_partial: true } : {}),
   }, null, 2);
 }
 
@@ -1197,7 +1200,7 @@ async function promoteNote(supabase: SupabaseClient, args: Args): Promise<string
 async function addLesson(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.lesson(args.situation, args.lesson, args.applies_to));
-  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags, newTagsPartial } = await normalizeAndReconcile(supabase, args.tags, projectId);
   const createdAt = parseOverrideTimestamp(args.created_at, 'created_at');
   const insertRow: any = {
     project_id: projectId,
@@ -1213,7 +1216,7 @@ async function addLesson(supabase: SupabaseClient, args: Args): Promise<string> 
   const { data, error } = await supabase.from('lessons').insert(insertRow)
     .select('id, display_id, situation, lesson, applies_to, severity, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify({ ...data, tag_substitutions: substitutions, new_tags: newTags }, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions, new_tags: newTags, ...(newTagsPartial ? { new_tags_partial: true } : {}) }, null, 2);
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1223,7 +1226,7 @@ async function addLesson(supabase: SupabaseClient, args: Args): Promise<string> 
 async function logDecision(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.decision(args.title, args.rationale, args.alternatives_considered));
-  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags, newTagsPartial } = await normalizeAndReconcile(supabase, args.tags, projectId);
 
   // provenance: optional. If provided, clean and store. If not, store null and warn.
   const provenance = (typeof args.provenance === 'string' && args.provenance.trim().length > 0)
@@ -1248,7 +1251,7 @@ async function logDecision(supabase: SupabaseClient, args: Args): Promise<string
     .select('id, display_id, title, rationale, alternatives_considered, provenance, tags, source, decided_at').single();
   if (error) throw new Error(error.message);
 
-  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags };
+  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags, ...(newTagsPartial ? { new_tags_partial: true } : {}) };
   if (!provenance) {
     response.warning =
       'provenance was not provided. The decision is recorded but "how we got here" is not captured. ' +
@@ -1281,11 +1284,13 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
   let tags: string[];
   let substitutions: Array<{ from: string; to: string; score: number }> = [];
   let newTags: string[] = [];
+  let newTagsPartial = false;
   if (args.tags && Array.isArray(args.tags) && args.tags.length > 0) {
     const result = await normalizeAndReconcile(supabase, args.tags, oldRow.project_id);
     tags = result.tags;
     substitutions = result.substitutions;
     newTags = result.newTags;
+    newTagsPartial = result.newTagsPartial;
   } else {
     tags = oldRow.tags ?? [];
   }
@@ -1310,7 +1315,7 @@ async function supersedeDecision(supabase: SupabaseClient, args: Args): Promise<
     .select('id, display_id, title, rationale, change_reason, provenance, tags, source, supersedes, decided_at').single();
   if (error) throw new Error(error.message);
 
-  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags };
+  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags, ...(newTagsPartial ? { new_tags_partial: true } : {}) };
   const warnings: string[] = [];
   if (!providedReason) {
     warnings.push(
@@ -1515,7 +1520,7 @@ async function getDecisionChain(supabase: SupabaseClient, args: Args): Promise<s
 async function addAssumption(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.assumption(args.statement, args.alternatives));
-  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags, newTagsPartial } = await normalizeAndReconcile(supabase, args.tags, projectId);
   // observed_at is the user-facing name (you observe assumptions, not "create" them); stored in created_at.
   const observedAt = parseOverrideTimestamp(args.observed_at, 'observed_at');
   const insertRow: any = {
@@ -1530,7 +1535,7 @@ async function addAssumption(supabase: SupabaseClient, args: Args): Promise<stri
   const { data, error } = await supabase.from('assumptions').insert(insertRow)
     .select('id, display_id, statement, alternatives, status, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify({ ...data, tag_substitutions: substitutions, new_tags: newTags }, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions, new_tags: newTags, ...(newTagsPartial ? { new_tags_partial: true } : {}) }, null, 2);
 }
 
 async function updateAssumption(supabase: SupabaseClient, args: Args): Promise<string> {
@@ -1550,7 +1555,7 @@ async function updateAssumption(supabase: SupabaseClient, args: Args): Promise<s
 async function addBlocker(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.blocker(args.question, args.context));
-  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags, newTagsPartial } = await normalizeAndReconcile(supabase, args.tags, projectId);
   // raised_at is the user-facing name (blockers are raised); stored in created_at.
   const raisedAt = parseOverrideTimestamp(args.raised_at, 'raised_at');
   const insertRow: any = {
@@ -1565,7 +1570,7 @@ async function addBlocker(supabase: SupabaseClient, args: Args): Promise<string>
   const { data, error } = await supabase.from('blockers').insert(insertRow)
     .select('id, display_id, question, context, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  return JSON.stringify({ ...data, tag_substitutions: substitutions, new_tags: newTags }, null, 2);
+  return JSON.stringify({ ...data, tag_substitutions: substitutions, new_tags: newTags, ...(newTagsPartial ? { new_tags_partial: true } : {}) }, null, 2);
 }
 
 async function resolveBlocker(supabase: SupabaseClient, args: Args): Promise<string> {
@@ -1584,7 +1589,7 @@ async function resolveBlocker(supabase: SupabaseClient, args: Args): Promise<str
 async function addNextMove(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.nextMove(args.description));
-  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags, newTagsPartial } = await normalizeAndReconcile(supabase, args.tags, projectId);
   const createdAt = parseOverrideTimestamp(args.created_at, 'created_at');
   const insertRow: any = {
     project_id: projectId,
@@ -1599,7 +1604,7 @@ async function addNextMove(supabase: SupabaseClient, args: Args): Promise<string
   const { data, error } = await supabase.from('next_moves').insert(insertRow)
     .select('id, display_id, description, priority, estimated_effort, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags };
+  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags, ...(newTagsPartial ? { new_tags_partial: true } : {}) };
   const boardReminder = await boardReminderFor(supabase, args.chat_tag);
   if (boardReminder) response.board_reminder = boardReminder;
   return JSON.stringify(response, null, 2);
@@ -1874,7 +1879,7 @@ async function listBoard(supabase: SupabaseClient, args: Args): Promise<string> 
 async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.plan(args.title, args.content));
-  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags, newTagsPartial } = await normalizeAndReconcile(supabase, args.tags, projectId);
 
   const provenance = (typeof args.provenance === 'string' && args.provenance.trim().length > 0)
     ? args.provenance.trim()
@@ -1946,7 +1951,7 @@ async function writePlan(supabase: SupabaseClient, args: Args): Promise<string> 
     console.error('Failed to seed revision 1:', revErr.message);
   }
 
-  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags };
+  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags, ...(newTagsPartial ? { new_tags_partial: true } : {}) };
   if (!provenance) {
     response.warning =
       'provenance was not provided. The plan is recorded but "how we got here" is not captured. ' +
@@ -2443,7 +2448,7 @@ async function updateCampaign(supabase: SupabaseClient, args: Args): Promise<str
 async function writeStatusSnapshot(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.snapshot(args.narrative));
-  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags, newTagsPartial } = await normalizeAndReconcile(supabase, args.tags, projectId);
   // observed_at describes the moment the narrative captures; stored in created_at.
   const observedAt = parseOverrideTimestamp(args.observed_at, 'observed_at');
   const insertRow: any = {
@@ -2457,7 +2462,7 @@ async function writeStatusSnapshot(supabase: SupabaseClient, args: Args): Promis
   const { data, error } = await supabase.from('status_snapshots').insert(insertRow)
     .select('id, display_id, narrative, tags, source, created_at').single();
   if (error) throw new Error(error.message);
-  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags };
+  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags, ...(newTagsPartial ? { new_tags_partial: true } : {}) };
   const boardReminder = await boardReminderFor(supabase, args.chat_tag);
   if (boardReminder) response.board_reminder = boardReminder;
   return JSON.stringify(response, null, 2);
@@ -2557,7 +2562,7 @@ async function describeCapabilities(supabase: SupabaseClient, _args: Args): Prom
 async function postJudgmentCall(supabase: SupabaseClient, args: Args): Promise<string> {
   if (!args.plan_id) throw new Error('plan_id is required — every disclosure is bound to the brief that produced it.');
   const projectId = await resolveProjectId(supabase, args.project_slug);
-  const { tags, substitutions, newTags } = await normalizeAndReconcile(
+  const { tags, substitutions, newTags, newTagsPartial } = await normalizeAndReconcile(
     supabase,
     [...(Array.isArray(args.tags) ? args.tags : []), 'judgment-call'],
     projectId
@@ -2588,7 +2593,7 @@ async function postJudgmentCall(supabase: SupabaseClient, args: Args): Promise<s
     .select('id, display_id, title, context, status, origin, plan_id, tags, plain_summary, action_needed, created_at').single();
   if (error) throw new Error(error.message);
 
-  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags };
+  const response: any = { ...data, tag_substitutions: substitutions, new_tags: newTags, ...(newTagsPartial ? { new_tags_partial: true } : {}) };
   // Soft enforcement, never a rejection: a disclosure with no plain_summary still posts
   // fine — the warning just asks the calling chat to supply one next time.
   if (!plainSummary) {
