@@ -1056,7 +1056,7 @@ async function createProject(supabase: SupabaseClient, args: Args): Promise<stri
 async function addNote(supabase: SupabaseClient, args: Args): Promise<string> {
   const projectId = await resolveProjectId(supabase, args.project_slug);
   const embedding = await embed(composeEmbeddingText.note(args.content, args.topic));
-  const { tags, substitutions } = await normalizeAndReconcile(supabase, args.tags, projectId);
+  const { tags, substitutions, newTags } = await normalizeAndReconcile(supabase, args.tags, projectId);
   const createdAt = parseOverrideTimestamp(args.created_at, 'created_at');
   const insertRow: any = {
     project_id: projectId,
