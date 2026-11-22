@@ -75,7 +75,9 @@ const SLUG_TAG_MIN_SEGMENTS = 3;
 // meant for Charles, so an exact-match filter on "charles" missed them
 // (TH-J-046, Build 61, 2026-11-03). Add a word here when another one is
 // caught being mangled; keep it to real cases, not a dictionary.
-const NEVER_SINGULARIZE = new Set<string>(['charles']);
+// "lens" was stored as "len" (the project-lens next move, Build 91 night
+// revision).
+const NEVER_SINGULARIZE = new Set<string>(['charles', 'lens']);
 
 function isSlugShaped(tag: string): boolean {
   if (IDENTIFIER_TAG_PATTERN.test(tag)) return true;
@@ -271,19 +273,32 @@ export async function loadExistingTags(
   supabase: SupabaseClient,
   projectId: string | null
 ): Promise<Set<string>> {
+  return (await loadExistingTagsTracked(supabase, projectId)).existing;
+}
+
+/**
+ * loadExistingTags, plus whether any table read failed (Build 91 night
+ * revision). A failed read is still skipped, but then the set is incomplete
+ * and new_tags may list tags that already exist, so the write reply says so.
+ */
+async function loadExistingTagsTracked(
+  supabase: SupabaseClient,
+  projectId: string | null
+): Promise<{ existing: Set<string>; partial: boolean }> {
   const existing = new Set<string>();
+  let partial = false;
   for (const table of ENTITY_TABLES) {
     let q = supabase.from(table).select('tags');
     if (projectId) q = q.eq('project_id', projectId);
     const { data, error } = await q;
-    if (error) continue; // non-fatal — partial reconciliation is better than none
+    if (error) { partial = true; continue; } // non-fatal — partial reconciliation is better than none
     for (const row of data ?? []) {
       for (const tag of row.tags ?? []) {
         if (typeof tag === 'string' && tag.length > 0) existing.add(tag);
       }
     }
   }
-  return existing;
+  return { existing, partial };
 }
 
 /**
@@ -334,19 +349,21 @@ export function reconcileWithExisting(
  * Full reconciliation pipeline for writes: normalize the raw input,
  * then reconcile against existing tags. newTags lists the stored tags not yet
  * used on the project (Build 91), so a write reply shows a brand-new tag
- * beside tag_substitutions.
+ * beside tag_substitutions. newTagsPartial is true when a table read failed,
+ * so newTags may list tags that already exist; replies then carry
+ * new_tags_partial: true.
  */
 export async function normalizeAndReconcile(
   supabase: SupabaseClient,
   rawTags: unknown,
   projectId: string | null
-): Promise<{ tags: string[]; substitutions: TagSubstitution[]; newTags: string[] }> {
+): Promise<{ tags: string[]; substitutions: TagSubstitution[]; newTags: string[]; newTagsPartial: boolean }> {
   const { tags: normalized, substitutions: shortened } = normalizeTagsReporting(rawTags);
-  if (normalized.length === 0) return { tags: [], substitutions: [], newTags: [] };
-  const existing = await loadExistingTags(supabase, projectId);
+  if (normalized.length === 0) return { tags: [], substitutions: [], newTags: [], newTagsPartial: false };
+  const { existing, partial } = await loadExistingTagsTracked(supabase, projectId);
   const { final, substitutions } = reconcileWithExisting(normalized, existing);
   const newTags = final.filter((t) => !existing.has(t));
-  return { tags: final, substitutions: [...shortened, ...substitutions], newTags };
+  return { tags: final, substitutions: [...shortened, ...substitutions], newTags, newTagsPartial: partial };
 }
 
 /**
