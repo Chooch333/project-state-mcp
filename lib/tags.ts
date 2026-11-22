@@ -5,6 +5,7 @@
 //   - Tags are normalized at write time to a canonical form (lowercase, hyphenated; single words singularized).
 //   - Before writing, the server checks if a similar tag already exists; if so, it uses the existing
 //     tag instead of creating a near-duplicate ("photos" → "photo" when "photo" already exists).
+//     Single-word tags only: hyphenated and slug-shaped tags are stored as written (Build 91).
 //   - At read time, the same fuzzy expansion is applied to input tags so searches catch near-matches.
 
 import { SupabaseClient } from '@supabase/supabase-js';
