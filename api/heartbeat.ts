@@ -16,10 +16,16 @@
 //                                       notes.created_at on project slug 'expert-bench' whose
 //                                       tags contain 'expert-ce' AND 'ce-receipt' and NOT
 //                                       'ce-attempt' (a receipt that read more than 0 items)
-//     step_in_scorer:  { last_receipt } }  (Build 74, BB-2026-11-09-step-in-scorer) newest
+//     step_in_scorer:  { last_receipt },  (Build 74, BB-2026-11-09-step-in-scorer) newest
 //                                       notes.created_at on project slug 'total-harness' whose
 //                                       tags contain 'step-in-receipt' and NOT 'step-in-attempt'
 //                                       (a receipt that read more than 0 chats)
+//     video_reader:    { last_run } }   (BB-2026-11-23-stack-fix-video-reader) newest
+//                                       notes.created_at on project slug 'world-graph' whose
+//                                       tags are exactly ['video-reader'] — the run note the
+//                                       Video Reader writes every night, quiet nights included.
+//                                       Exact, so a build's session log that also carries the
+//                                       tag (with session-log and others) never counts.
 //
 // A missing value is null, never omitted. On a database error: 200 with ok:false,
 // db_ok:false and a short error string (no stack trace).
@@ -31,6 +37,7 @@ const RESULT_WORDS = new Set(['built', 'skipped', 'stuck', 'deploy-red', 'interr
 
 const EXPERT_CE_PROJECT_SLUG = 'expert-bench';
 const STEP_IN_PROJECT_SLUG = 'total-harness';
+const VIDEO_READER_PROJECT_SLUG = 'world-graph';
 
 function iso(v: unknown): string | null {
   if (typeof v !== 'string' || v.length === 0) return null;
@@ -59,26 +66,28 @@ async function newest(
 }
 
 // Newest note on a project (looked up by slug) whose tags contain every tag in `withTags`
-// and not `withoutTag`. The project id is used only inside this query — it never appears
-// in the response.
+// and not `withoutTag`. With `exact`, the note's tags must also hold nothing else (contains
+// AND contained by `withTags`). The project id is used only inside this query — it never
+// appears in the response.
 async function newestTaggedNote(
   projectSlug: string,
   withTags: string[],
-  withoutTag: string
+  withoutTag: string,
+  exact = false
 ): Promise<Record<string, any> | null> {
   const sb = getSupabase();
   const proj = await sb.from('projects').select('id').eq('slug', projectSlug).limit(1);
   if (proj.error) throw new Error('projects: ' + proj.error.message);
   const projectId = proj.data && proj.data.length > 0 ? (proj.data[0] as any).id : null;
   if (!projectId) return null;
-  const { data, error } = await sb
+  let q: any = sb
     .from('notes')
     .select('created_at')
     .eq('project_id', projectId)
     .contains('tags', withTags)
-    .not('tags', 'cs', '{' + withoutTag + '}')
-    .order('created_at', { ascending: false, nullsFirst: false })
-    .limit(1);
+    .not('tags', 'cs', '{' + withoutTag + '}');
+  if (exact) q = q.containedBy('tags', withTags);
+  const { data, error } = await q.order('created_at', { ascending: false, nullsFirst: false }).limit(1);
   if (error) throw new Error('notes: ' + error.message);
   return data && data.length > 0 ? (data[0] as Record<string, any>) : null;
 }
@@ -91,6 +100,11 @@ function newestExpertCeReceipt(): Promise<Record<string, any> | null> {
 // Newest step-in scorer receipt that read chats, on the total-harness project.
 function newestStepInReceipt(): Promise<Record<string, any> | null> {
   return newestTaggedNote(STEP_IN_PROJECT_SLUG, ['step-in-receipt'], 'step-in-attempt');
+}
+
+// Newest Video Reader run note on the world-graph project: tags exactly ['video-reader'].
+function newestVideoReaderRun(): Promise<Record<string, any> | null> {
+  return newestTaggedNote(VIDEO_READER_PROJECT_SLUG, ['video-reader'], 'session-log', true);
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -107,13 +121,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   const checkedAt = new Date().toISOString();
   try {
-    const [inspector, repairerCp, repairerNote, night, ceReceipt, stepInReceipt] = await Promise.all([
+    const [inspector, repairerCp, repairerNote, night, ceReceipt, stepInReceipt, videoReaderRun] = await Promise.all([
       newest('punch_checkpoints', 'created_at', ['agent', 'inspector']),
       newest('punch_checkpoints', 'created_at', ['agent', 'repairer']),
       newest('punch_item_notes', 'created_at', ['author', 'repairer']),
       newest('night_runs', 'created_at', null, 'result'),
       newestExpertCeReceipt(),
       newestStepInReceipt(),
+      newestVideoReaderRun(),
     ]);
     const lastResult = night && typeof night.result === 'string' && RESULT_WORDS.has(night.result) ? night.result : null;
     const body = {
@@ -125,6 +140,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       night_runner: { last_night: iso(night?.created_at), last_result: lastResult },
       expert_ce: { last_receipt: iso(ceReceipt?.created_at) },
       step_in_scorer: { last_receipt: iso(stepInReceipt?.created_at) },
+      video_reader: { last_run: iso(videoReaderRun?.created_at) },
     };
     res.statusCode = 200;
     res.end(req.method === 'HEAD' ? undefined : JSON.stringify(body));
@@ -140,6 +156,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       night_runner: { last_night: null, last_result: null },
       expert_ce: { last_receipt: null },
       step_in_scorer: { last_receipt: null },
+      video_reader: { last_run: null },
     };
     res.statusCode = 200;
     res.end(req.method === 'HEAD' ? undefined : JSON.stringify(body));
