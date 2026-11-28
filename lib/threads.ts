@@ -336,8 +336,18 @@ export async function closeThread(supabase: SupabaseClient, args: Args): Promise
 }
 
 export async function listOpenThreads(supabase: SupabaseClient, args: Args): Promise<string> {
+  // Optional waiting_on filter (BB-2026-11-27-adv-106-waiting-on-filter): only cards
+  // waiting on that party. Absent (undefined, null or empty) means no filter, as before.
+  const waiting_on =
+    args.waiting_on === undefined || args.waiting_on === null || args.waiting_on === ''
+      ? undefined
+      : args.waiting_on;
+  if (waiting_on !== undefined && !(WAITING_ON as readonly string[]).includes(waiting_on)) {
+    throw new Error(`waiting_on must be one of: ${WAITING_ON.join(', ')}.`);
+  }
   let q = supabase.from('open_threads').select(THREAD_COLUMNS).order('opened_at', { ascending: true });
   if (args.include_closed !== true) q = q.eq('status', 'open');
+  if (waiting_on !== undefined) q = q.eq('waiting_on', waiting_on);
   const { data, error } = await q;
   if (error) throw new Error(plainDbError(error.message));
   const rows = data ?? [];
